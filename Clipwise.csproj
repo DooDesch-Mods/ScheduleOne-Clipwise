@@ -1,0 +1,171 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Shared release hardening: strip Release debug info + assembly identity, cuts AV false positives (see Workspace/build/Hardening.props). -->
+  <Import Project="$(MSBuildThisFileDirectory)../Workspace/build/Hardening.props" Condition="Exists('$(MSBuildThisFileDirectory)../Workspace/build/Hardening.props')" />
+  <Import Project="$(MSBuildThisFileDirectory)Workspace/build/Hardening.props" Condition="Exists('$(MSBuildThisFileDirectory)Workspace/build/Hardening.props')" />
+
+  <!-- Optional Snitch profiler in Debug builds (no-op when the Snitch host is absent, e.g. CI, which only
+       checks out Workspace/lib and not Workspace/build). -->
+  <Import Project="$(MSBuildThisFileDirectory)../Workspace/build/Snitch.props" Condition="Exists('$(MSBuildThisFileDirectory)../Workspace/build/Snitch.props')" />
+
+  <!--
+    Clipwise - MelonLoader mod for Schedule I.
+
+    The management clipboard renders an item field's options as one flat, unscrollable, unsearchable 5-wide icon
+    grid (ItemSelector.CreateOptions). Clipwise intercepts the field click and shows a searchable, tabbed picker
+    instead, classifies unregistered items on its own, and exposes an API (Clipwise.Api) so content mods can put
+    their items in named categories.
+
+    Dual-backend capable:
+      net6.0          => IL2CPP backend  (Backend=il2cpp, refs from Workspace/lib/il2cpp)
+      netstandard2.1  => Mono   backend  (Backend=mono,   refs from Workspace/lib/mono)
+    Currently builds IL2CPP only; the netstandard2.1 target is enabled once the Mono libs exist.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <!-- Enable both once Mono libs are captured (Steam 'alternate' branch):
+         <TargetFrameworks>net6.0;netstandard2.1</TargetFrameworks> -->
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>Clipwise</RootNamespace>
+    <AssemblyName>Clipwise</AssemblyName>
+    <NeutralLanguage>en-US</NeutralLanguage>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Description>Categories, search and tooltips for the management clipboard's item pickers.</Description>
+    <!-- MSB3277/MSB3245: il2cpp interop transitive refs. CS0436: DooDesch.UI is compiled in as linked source
+         while other DooDesch mod DLLs ship the same public types - the local copy is meant to win. -->
+    <NoWarn>$(NoWarn);MSB3277;MSB3245;CS0436</NoWarn>
+
+    <WorkspaceLibPath Condition="'$(WorkspaceLibPath)' == ''">$(MSBuildThisFileDirectory)../Workspace/lib</WorkspaceLibPath>
+    <!-- Local test copy, not the real Steam install: a stray build must never land in a play session. Deployment
+         to a leased test slot goes through the MCP build_mod tool, which overrides this. -->
+    <ModsDirectory Condition="'$(ModsDirectory)' == ''">$(MSBuildThisFileDirectory)../_MPTest/Schedule I/Mods</ModsDirectory>
+  </PropertyGroup>
+
+  <!-- Backend selection derived from the active TargetFramework -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net6.0'">
+    <Backend>il2cpp</Backend>
+    <DefineConstants>$(DefineConstants);IL2CPP</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
+    <Backend>mono</Backend>
+    <DefineConstants>$(DefineConstants);MONO</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup>
+    <GameManagedPath>$(WorkspaceLibPath)/$(Backend)/game</GameManagedPath>
+    <MelonLoaderPath>$(WorkspaceLibPath)/$(Backend)/melonloader</MelonLoaderPath>
+  </PropertyGroup>
+
+  <!-- Backend-specific GlobalUsings: keep only the active backend's file -->
+  <ItemGroup>
+    <Compile Remove="Compat/GlobalUsings.Il2Cpp.cs" Condition="'$(Backend)' != 'il2cpp'" />
+    <Compile Remove="Compat/GlobalUsings.Mono.cs" Condition="'$(Backend)' != 'mono'" />
+  </ItemGroup>
+
+  <!-- CI checks out the shared Workspace repo as a SUBFOLDER of this project, so the SDK's default **/*.cs glob
+       would sweep in Workspace/ui, Workspace/build, etc. Compile only this mod's own source. No-op locally, where
+       Workspace is a sibling folder. Everything actually needed is linked back in explicitly via the props
+       imports BELOW - they must stay below this ItemGroup, or CI strips their includes again and the types
+       silently bind from a referenced assembly instead of compiling in. -->
+  <ItemGroup>
+    <Compile Remove="Workspace/**/*.cs" />
+    <!-- The modder shim is its own assembly and lives in this repo only so modders can get it. Compiling it
+         into the host too would give Clipwise a second copy of the client that binds to itself. -->
+    <Compile Remove="Clipwise.Api/**/*.cs" />
+  </ItemGroup>
+
+  <!-- Shared DooDesch.UI in-game design-system layer (tokens, scroll lists, inputs, segmented tabs) - linked source. -->
+  <Import Project="$(MSBuildThisFileDirectory)../Workspace/build/DooDeschUI.props" Condition="Exists('$(MSBuildThisFileDirectory)../Workspace/build/DooDeschUI.props')" />
+  <Import Project="$(MSBuildThisFileDirectory)Workspace/build/DooDeschUI.props" Condition="Exists('$(MSBuildThisFileDirectory)Workspace/build/DooDeschUI.props')" />
+
+  <!-- Shared gettext-style localization (DooDesch.Localization.L10n). Resolved via $(WorkspaceLibPath)/.. so the
+       SAME line works locally (Workspace = sibling) and in CI (Workspace = subfolder, WorkspaceLibPath via /p:). -->
+  <Import Project="$(WorkspaceLibPath)/../build/L10n.props" Condition="Exists('$(WorkspaceLibPath)/../build/L10n.props')" />
+
+  <!-- Mod loader references (both backends) -->
+  <ItemGroup>
+    <Reference Include="MelonLoader">
+      <HintPath>$(MelonLoaderPath)/MelonLoader.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(MelonLoaderPath)/0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>$(MelonLoaderPath)/Newtonsoft.Json.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- IL2CPP-only references -->
+  <ItemGroup Condition="'$(Backend)' == 'il2cpp'">
+    <Reference Include="Il2CppInterop.Runtime">
+      <HintPath>$(MelonLoaderPath)/Il2CppInterop.Runtime.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2Cppmscorlib">
+      <HintPath>$(GameManagedPath)/Il2Cppmscorlib.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppSystem">
+      <HintPath>$(GameManagedPath)/Il2CppSystem.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(GameManagedPath)/Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppScheduleOne.Core">
+      <HintPath>$(GameManagedPath)/Il2CppScheduleOne.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="S1API.Il2Cpp.MelonLoader">
+      <HintPath>$(WorkspaceLibPath)/il2cpp/s1api/S1API.Il2Cpp.MelonLoader.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(GameManagedPath)/UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>$(GameManagedPath)/UnityEngine.UI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UIModule">
+      <HintPath>$(GameManagedPath)/UnityEngine.UIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>$(GameManagedPath)/UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>$(GameManagedPath)/UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- Input.mousePosition for the floating tooltip. -->
+    <Reference Include="UnityEngine.InputLegacyModule">
+      <HintPath>$(GameManagedPath)/UnityEngine.InputLegacyModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- ItemFieldUI's labels are TextMeshProUGUI. -->
+    <Reference Include="Unity.TextMeshPro">
+      <HintPath>$(GameManagedPath)/Unity.TextMeshPro.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="PostBuild" AfterTargets="Build" Condition="'$(OS)' == 'Windows_NT'">
+    <Exec Condition="Exists('$(ModsDirectory)')"
+          Command="cmd /c if exist &quot;$(ModsDirectory)&quot; copy /Y &quot;$(TargetPath)&quot; &quot;$(ModsDirectory)&quot;"
+          ContinueOnError="true" />
+  </Target>
+
+</Project>

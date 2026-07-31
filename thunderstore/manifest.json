@@ -1,0 +1,13 @@
+{
+  "name": "Clipwise",
+  "version_number": "1.0.0",
+  "website_url": "https://github.com/DooDesch-Mods/ScheduleOne-Clipwise",
+  "description": "Category tabs, search, filters and tooltips for the management clipboard - and it sorts other mods' seeds on its own.",
+  "dependencies": [
+    "LavaGang-MelonLoader-0.7.3",
+    "ifBars-S1API_Forked-3.0.5"
+  ],
+  "contributors": [
+    "DooDesch"
+  ]
+}
