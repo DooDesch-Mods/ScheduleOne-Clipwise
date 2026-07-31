@@ -52,9 +52,9 @@ Clipboard.Category("yourname.yourmod", "exotics", "Exotics", sortOrder: 500)
          .Item("purple-haze", "yourmod_purple_haze_seed", sortKey: "Purple Haze");
 ```
 
-Either reference `Clipwise.Api.dll` or drop the single `Clipwise.cs` file into your project. It has zero
-dependencies, works whether Clipwise loads before or after you, and does nothing at all when Clipwise isn't
-installed, so you can ship it unconditionally with no hard dependency.
+Grab `Clipwise.Api/Clipwise.cs` from this repo and drop it into your project, or build `Clipwise.Api` and
+reference the DLL. It has zero dependencies, works whether Clipwise loads before or after you, and does
+nothing at all when Clipwise isn't installed, so you can ship it unconditionally with no hard dependency.
 
 Full API, tag conventions and the JSON schema: **[Modder API](https://github.com/DooDesch-Mods/ScheduleOne-Clipwise/wiki)**
 

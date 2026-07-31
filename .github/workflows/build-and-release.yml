@@ -98,11 +98,6 @@ jobs:
       - name: Build the project (Release, IL2CPP)
         run: dotnet build Clipwise.csproj --configuration Release /p:WorkspaceLibPath="${{ github.workspace }}/Workspace/lib"
 
-      # The modder shim: a zero-reference netstandard2.0 assembly. Mod authors can either reference this DLL or
-      # copy Clipwise.Api/Clipwise.cs into their own project, so both routes have to ship.
-      - name: Build the modder shim (Clipwise.Api)
-        run: dotnet build Clipwise.Api/Clipwise.Api.csproj --configuration Release
-
       - name: Prepare release directory
         run: |
           mkdir -p release
@@ -149,14 +144,6 @@ jobs:
           name: Clipwise-nexus
           path: "Clipwise_${{ steps.version-check.outputs.version }}_nexus.zip"
 
-      # Its own asset, deliberately outside both install payloads: a mod author references it at build time,
-      # a player must never end up with it in Mods\.
-      - name: Upload modder shim
-        uses: actions/upload-artifact@v4
-        with:
-          name: Clipwise-api
-          path: Clipwise.Api/bin/Release/netstandard2.0/Clipwise.Api.dll
-
   release:
     needs: build
     runs-on: ubuntu-latest
@@ -166,23 +153,15 @@ jobs:
         with:
           name: Clipwise
 
-      - name: Download modder shim
-        uses: actions/download-artifact@v4
-        with:
-          name: Clipwise-api
-          path: api
-
       - name: Extract DLL from ZIP
         run: |
           unzip -q "Clipwise_${{ needs.build.outputs.version }}.zip" -d release/
-          ls -la release/ api/
+          ls -la release/
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          files: |
-            release/Clipwise.dll
-            api/Clipwise.Api.dll
+          files: release/Clipwise.dll
           body: |
             ## Changes in ${{ needs.build.outputs.version }}
 

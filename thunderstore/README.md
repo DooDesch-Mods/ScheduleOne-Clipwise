@@ -37,8 +37,9 @@ over what a mod registered in code. There's a commented example in that folder a
 
 ## For mod authors
 
-Two lines and your items get their own tab. Reference `Clipwise.Api.dll` or copy the single `Clipwise.cs` file
-into your project: zero dependencies, load-order independent, and a no-op when Clipwise isn't installed.
+Two lines and your items get their own tab. Copy `Clipwise.Api/Clipwise.cs` from the GitHub repo into your
+project (or build that project and reference the DLL): zero dependencies, load-order independent, and a no-op
+when Clipwise isn't installed.
 
 ```csharp
 using Clipwise.Api;
