@@ -58,7 +58,7 @@ namespace Clipwise.Debugging
             string cmd = parts[0].ToLowerInvariant();
             if (cmd != "cwhelp" && cmd != "cwcats" && cmd != "cwdump" && cmd != "cwconflicts"
              && cmd != "cwnamecheck" && cmd != "cwauto" && cmd != "cwreload" && cmd != "cwopen"
-             && cmd != "cwtab" && cmd != "cwsearch")
+             && cmd != "cwtab" && cmd != "cwsearch" && cmd != "cwvanilla")
                 return false;
 
             // Both SubmitCommand overloads can fire for one submission (the string body calls the list body),
@@ -80,6 +80,7 @@ namespace Clipwise.Debugging
                     case "cwauto": Auto(); break;
                     case "cwreload": Reload(); break;
                     case "cwopen": Open(); break;
+                    case "cwvanilla": Vanilla(); break;
                     case "cwtab": Tab(parts.Length > 1 ? parts[1] : ""); break;
                     case "cwsearch": Search(parts.Length > 1 ? string.Join(" ", parts, 1, parts.Length - 1) : ""); break;
                 }
@@ -273,6 +274,49 @@ namespace Clipwise.Debugging
             bool ok = ItemPicker.TryOpen(canvasRoot, view, item =>
                 Say("Clipwise: cwopen picked " + (item != null ? item.ID : "(none)")));
             if (!ok) Complain("Clipwise: the picker refused to open - see the log.");
+        }
+
+        /// <summary>
+        /// Open the UNTOUCHED vanilla item selector on the seed list, so its look can be compared side by side
+        /// with what Clipwise makes of it.
+        ///
+        /// This is the reference the redesign is measured against: the goal is a screen that reads as part of
+        /// the game, and the only way to judge that is to put the two next to each other.
+        /// </summary>
+        private static void Vanilla()
+        {
+            var seeds = Seeds();
+            if (seeds == null) { Complain("Clipwise: no ManagementUtilities in this scene - load a save first."); return; }
+
+            // The clipboard interface is inactive until the clipboard is equipped, and FindObjectOfType skips
+            // inactive objects - so this has to go through FindObjectsOfTypeAll, filtered to real scene objects
+            // so a prefab asset never gets activated.
+            ItemSelector screen = null;
+            var all = Resources.FindObjectsOfTypeAll<Il2CppScheduleOne.Management.ManagementInterface>();
+            for (int i = 0; all != null && i < all.Length; i++)
+            {
+                var mi = all[i];
+                if (mi == null || !mi.gameObject.scene.IsValid()) continue;
+                if (mi.ItemSelectorScreen != null) { screen = mi.ItemSelectorScreen; break; }
+            }
+            if (screen == null) { Complain("Clipwise: no ItemSelector in this scene."); return; }
+
+            // The selector lives inside the clipboard interface, which is inactive until the clipboard is
+            // equipped. Switch the container on so the screen is actually visible on its own.
+            try
+            {
+                Transform t = screen.transform;
+                while (t != null) { if (!t.gameObject.activeSelf) t.gameObject.SetActive(true); t = t.parent; }
+            }
+            catch (Exception e) { Core.LogDebug("Clipwise: could not activate the selector's parents: " + e.Message); }
+
+            var options = new Il2CppSystem.Collections.Generic.List<ItemSelector.Option>();
+            for (int i = 0; i < seeds.Count; i++)
+                options.Add(new ItemSelector.Option(seeds[i].Name, seeds[i]));
+
+            screen.Initialize("Seed (vanilla reference)", options, null, null);
+            screen.Open();
+            Say($"Clipwise: opened the vanilla selector with {options.Count} option(s).");
         }
 
         /// <summary>Switch the open picker to a tab. Accepts a full category key, a substring of one, or nothing

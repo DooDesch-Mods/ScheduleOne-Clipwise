@@ -201,14 +201,9 @@ namespace Clipwise.Index
                 return CategoryDef.MakeKey(AutoSource, VanillaId);
             }
 
-            string prefix = Prefix(facts.ItemId);
-            if (prefix != null && prefixCounts.TryGetValue(prefix, out int count) && count >= MinClusterSize)
-            {
-                string id = PrefixIdPrefix + prefix;
-                EnsureAuto(id, Prettify(prefix), SortPrefixCluster);
-                return CategoryDef.MakeKey(AutoSource, id);
-            }
-
+            // No prefix clustering. An ID prefix is not a name: a tab labelled "b2s" tells a player nothing and
+            // reads as a leaked internal. Anything a mod did not file itself goes into one honest bucket, and the
+            // mod's own registration is what earns it a real tab.
             EnsureAuto(OtherId, "Other", SortOther);
             return CategoryDef.MakeKey(AutoSource, OtherId);
         }

@@ -306,6 +306,10 @@ namespace Clipwise.UI
                 if (tag.StartsWith("clipwise:vanilla", StringComparison.Ordinal)) continue;
                 if (tag.StartsWith("clipwise:modded", StringComparison.Ordinal)) continue;
                 if (tag.StartsWith("clipwise:discovered", StringComparison.Ordinal)) continue;   // its own chip above
+                // Effects are not a filter bar. There are thirty-odd of them, and a wall of toggles is a wall,
+                // not a way to narrow something down. They live in the hover panel and in the search box, where
+                // typing "calming" does the same job without costing a row of chips.
+                if (tag.StartsWith("clipwise:effect/", StringComparison.Ordinal)) continue;
                 if (shown++ >= MaxTagChips) break;
 
                 string t = tag;
