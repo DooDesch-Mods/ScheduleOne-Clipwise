@@ -9,7 +9,7 @@ using Clipwise.UI;
 using DooDesch.UI;
 using MelonLoader;
 
-[assembly: MelonInfo(typeof(Clipwise.Core), "Clipwise", "1.0.0", "DooDesch", "https://github.com/DooDesch-Mods/ScheduleOne-Clipwise")]
+[assembly: MelonInfo(typeof(Clipwise.Core), "Clipwise", DooDesch.ModVersion.Current, "DooDesch", "https://github.com/DooDesch-Mods/ScheduleOne-Clipwise")]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace Clipwise

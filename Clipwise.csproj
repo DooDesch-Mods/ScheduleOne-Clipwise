@@ -80,6 +80,12 @@
     <Compile Remove="Clipwise.Api/**/*.cs" />
   </ItemGroup>
 
+  <!-- Generates DooDesch.ModVersion.Current from this project's own version property, so MelonInfo carries the
+       released version and cannot drift out of it. MUST come after the Workspace Remove so CI keeps the file. -->
+  <Import Project="$(MSBuildThisFileDirectory)../Workspace/build/ModVersion.props" Condition="Exists('$(MSBuildThisFileDirectory)../Workspace/build/ModVersion.props')" />
+  <Import Project="$(MSBuildThisFileDirectory)Workspace/build/ModVersion.props" Condition="Exists('$(MSBuildThisFileDirectory)Workspace/build/ModVersion.props')" />
+
+
   <!-- Shared DooDesch.UI in-game design-system layer (tokens, scroll lists, inputs, segmented tabs) - linked source. -->
   <Import Project="$(MSBuildThisFileDirectory)../Workspace/build/DooDeschUI.props" Condition="Exists('$(MSBuildThisFileDirectory)../Workspace/build/DooDeschUI.props')" />
   <Import Project="$(MSBuildThisFileDirectory)Workspace/build/DooDeschUI.props" Condition="Exists('$(MSBuildThisFileDirectory)Workspace/build/DooDeschUI.props')" />
