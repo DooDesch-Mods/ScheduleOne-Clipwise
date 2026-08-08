@@ -56,7 +56,7 @@ Grab `Clipwise.Api/Clipwise.cs` from this repo and drop it into your project, or
 reference the DLL. It has zero dependencies, works whether Clipwise loads before or after you, and does
 nothing at all when Clipwise isn't installed, so you can ship it unconditionally with no hard dependency.
 
-Full API, tag conventions and the JSON schema: **[Modder API](https://github.com/DooDesch-Mods/ScheduleOne-Clipwise/wiki)**
+Full API, tag conventions and the JSON schema: **[Modder API](https://docs.doodesch.de/mods/clipwise/)**
 
 ## Overrides
 
