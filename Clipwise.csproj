@@ -45,7 +45,6 @@
     <WorkspaceLibPath Condition="'$(WorkspaceLibPath)' == ''">$(MSBuildThisFileDirectory)../Workspace/lib</WorkspaceLibPath>
     <!-- Local test copy, not the real Steam install: a stray build must never land in a play session. Deployment
          to a leased test slot goes through the MCP build_mod tool, which overrides this. -->
-    <ModsDirectory Condition="'$(ModsDirectory)' == ''">$(MSBuildThisFileDirectory)../_MPTest/Schedule I/Mods</ModsDirectory>
   </PropertyGroup>
 
   <!-- Backend selection derived from the active TargetFramework -->
@@ -93,6 +92,10 @@
   <!-- Shared gettext-style localization (DooDesch.Localization.L10n). Resolved via $(WorkspaceLibPath)/.. so the
        SAME line works locally (Workspace = sibling) and in CI (Workspace = subfolder, WorkspaceLibPath via /p:). -->
   <Import Project="$(WorkspaceLibPath)/../build/L10n.props" Condition="Exists('$(WorkspaceLibPath)/../build/L10n.props')" />
+  <!-- Where a build is allowed to install: the test copy by default, and never a real game installation
+       without saying so out loud. See Workspace/build/Deploy.props. -->
+  <Import Project="$(MSBuildThisFileDirectory)../Workspace/build/Deploy.props" Condition="Exists('$(MSBuildThisFileDirectory)../Workspace/build/Deploy.props')" />
+  <Import Project="$(MSBuildThisFileDirectory)Workspace/build/Deploy.props" Condition="Exists('$(MSBuildThisFileDirectory)Workspace/build/Deploy.props')" />
 
   <!-- Mod loader references (both backends) -->
   <ItemGroup>
