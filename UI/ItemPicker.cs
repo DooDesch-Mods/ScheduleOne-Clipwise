@@ -149,9 +149,33 @@ namespace Clipwise.UI
 
             // The card lives on the clipboard's canvas: if that canvas goes away (scene change, clipboard torn
             // down) the picker has to go with it rather than linger as an orphan.
+            //
+            // Those two checks are not enough on their own, because the card is parented to the ROOT canvas while
+            // the clipboard only destroys its config panel (ManagementInterface.DestroyConfigPanel). Holster the
+            // clipboard or switch hotbar slot with the picker up and the card outlives the screen it belongs to:
+            // still alive, so IsOpen stays true for the rest of the session, and ExitPatch then swallows every
+            // Escape and right-click the game sends - including the one ObjectSelector needs to commit a station
+            // assignment (ObjectSelector.cs:64, :349-356). The clipboard's own IsOpen is the honest liveness test.
             if (_scrim == null || _content == null) { Close(); return; }
 
+            if (!ClipboardOpen())
+            {
+                // Logged at message level on purpose: it fires once per occurrence, and it is the only evidence
+                // that this path was reached in a build without the test kit.
+                Core.Log.Msg("Clipwise: the clipboard closed while the picker was up - dropping the card.");
+                Close();
+                return;
+            }
+
             UpdateHover();
+        }
+
+        /// <summary>Is the clipboard this card belongs to still up? Polled rather than subscribed, because both
+        /// events that would report it want an IL2CPP delegate handed to the game.</summary>
+        private static bool ClipboardOpen()
+        {
+            try { return Singleton<ManagementClipboard>.InstanceExists && Singleton<ManagementClipboard>.Instance.IsOpen; }
+            catch { return false; }
         }
 
         /// <summary>Reopen on the tab the player left off on, as long as it still exists in this field.</summary>
