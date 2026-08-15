@@ -1,112 +1,208 @@
 /*
-  The clipboard, not a phone screen.
+  The vanilla clipboard's own seed page, with a search box and a filter added to it.
 
-  Every colour here is taken off the vanilla management clipboard rather than from Clipwise's old dark card:
-  a light grey sheet, near-black type, a grey label column, and a hand-drawn rule under the head. The point of
-  moving to a surface is that this file IS the design - matching vanilla stops being a uGUI rebuild.
+  COLOURS ARE VANILLA'S, not this mod's. The card is the game's light paper grey, the type is near-black and
+  nothing is tinted. A dark picker floating on a wooden board reads as a different game, and the whole point of
+  #69 is that this page should look like the one it replaces.
 
-  Two engine rules shape the markup more than taste does. There is no `z-index` and no `cursor`, so depth is
-  document order; and symbol characters outside Latin-1 draw as empty boxes in the game's TMP atlases, so
-  nothing here uses a glyph for an icon. Where vanilla shows an X, this draws the word or a box.
+  Sideload's CSS is a subset: no z-index, no hsl(), px and % only. Every box is a flex container and the DEFAULT
+  direction is COLUMN, so a row has to say so.
 */
 
-:root {
-  --sheet:     #C7CBD1;
-  --sheet-2:   #BFC4CB;
-  --ink:       #1B1D21;
-  --ink-2:     #5A5F68;
-  --hairline:  #9AA0A8;
-  --hot:       #B3261E;
-  --pick:      #AEB4BC;
-}
-
 body {
-  /* Required: the root is auto-height, so a percentage below has no basis without this. */
+  /* Required. The percentage heights below need a definite basis and the root is auto-height. */
   height: 100%;
   font-family: game-ui;
   font-size: 15px;
-  color: var(--ink);
+  color: #23262b;
 }
 
 .card {
   height: 100%;
-  padding: 14px 16px;
-  gap: 10px;
-  background: var(--sheet);
+  padding: 18px 20px 16px 20px;
+  background: #d7d9dc;
 }
+
+/* ---- head ------------------------------------------------------------------------------------------------ */
 
 .head {
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
+  height: 30px;
 }
 
-.head-title { font-size: 21px; font-weight: 700; }
-.head-count { font-size: 13px; color: var(--ink-2); }
-
-/* Vanilla draws a rule under the head rather than a border, and a border on the head would follow the card's
-   one border colour. A box of its own is both closer and cheaper. */
-.rule { height: 2px; background: var(--hairline); }
-
-.tabs { flex-direction: row; flex-wrap: wrap; gap: 6px; }
-
-.tab {
-  padding: 4px 10px;
-  border: 1px solid var(--hairline);
-  background: transparent;
-  color: var(--ink-2);
-  font-size: 12px;
+.back {
+  width: 92px;
+  height: 26px;
+  font-size: 17px;
   font-weight: 700;
-  letter-spacing: 1px;
+  color: #23262b;
+  background: transparent;
   align-items: center;
 }
 
-.tab:hover { background: var(--sheet-2); }
-.tab.on { background: var(--ink); color: var(--sheet); border-color: var(--ink); }
+.back:hover { color: #5a5f68; }
+
+.head-title {
+  font-size: 19px;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* Balances the Back button so the title sits in the middle of the card rather than the middle of what is left. */
+.head-count {
+  width: 92px;
+  font-size: 12px;
+  color: #6b7079;
+  text-align: right;
+  align-items: center;
+}
+
+/* Vanilla draws a hand-inked stroke here rather than a border. A 2px rule is the closest the subset gets; the
+   real one is a sprite and would have to be shipped as a PNG. */
+.rule {
+  height: 2px;
+  margin: 8px 0 12px 0;
+  background: #3a3d42;
+}
+
+/* ---- search and filter ----------------------------------------------------------------------------------- */
 
 .find {
-  height: 30px;
-  padding: 0 10px;
-  border: 1px solid var(--hairline);
-  background: #D8DBE0;
-  color: var(--ink);
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid #a9adb4;
+  border-radius: 4px;
+  background: #e9eaec;
+  color: #23262b;
   align-items: center;
 }
 
-.find:focus { border-color: var(--ink); }
+.chips {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 8px 0;
+}
 
-/* min-height: 0 is what makes this scroll. Without it the automatic minimum in a column is the content's own
-   height, so the list grows the card instead. */
+.chip {
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid #a9adb4;
+  border-radius: 12px;
+  background: #e9eaec;
+  color: #4a4f57;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  align-items: center;
+}
+
+.chip:hover { background: #f2f3f4; }
+
+.chip.on {
+  background: #3a3d42;
+  border: 1px solid #3a3d42;
+  color: #f2f3f4;
+}
+
+/* ---- the list -------------------------------------------------------------------------------------------- */
+
 .list {
   flex: 1;
+  /* Without this the list never shrinks and so never scrolls. */
   min-height: 0;
-  overflow-y: auto;
+  overflow: auto;
+}
+
+.section {
+  padding: 10px 2px 4px 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #6b7079;
+}
+
+/* A tier inside the mod's own section. Indented and lighter, so it reads as a division of the heading
+   above it rather than another heading of the same rank. */
+.section.sub {
+  padding: 6px 2px 2px 14px;
+  font-size: 10px;
+  color: #8b9098;
 }
 
 .row {
   flex-direction: row;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--hairline);
-  background: transparent;
+  height: 34px;
+  border-bottom: 1px solid #c6c9cd;
 }
 
-.row:hover { background: var(--sheet-2); }
-.row:active { background: var(--pick); }
+.row.sel { background: #cfd2d6; }
 
-.row-name { flex: 1; min-width: 0; }
-.row-note { color: var(--ink-2); font-size: 12px; }
+/* The whole line except the star. It is its own button so that starring an item and choosing it stay two
+   separate clicks. */
+.pick {
+  flex: 1;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 8px;
+  background: transparent;
+  color: #23262b;
+  text-align: left;
+}
 
-.section {
-  padding: 8px 8px 2px 8px;
-  color: var(--ink-2);
+.pick:hover { background: #e4e6e8; }
+
+.row-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row-note {
+  width: 190px;
+  font-size: 12px;
+  color: #71767e;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row-tier {
+  width: 26px;
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 1px;
+  color: #8b9098;
+  text-align: right;
 }
 
-.empty { padding: 14px 8px; color: var(--ink-2); }
+/* A star that is always there, so a row does not change width when it is starred. */
+.star {
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  align-items: center;
+  justify-content: center;
+}
 
-.foot { flex-direction: row; align-items: center; justify-content: center; }
-.hint { color: var(--ink-2); font-size: 11px; }
+/* The picture is white; `color` tints it. Its size comes from CSS alone - the HTML width and height
+   attributes never reach the layout, which runs without Unity and cannot read a PNG. */
+.star-img {
+  width: 13px;
+  height: 13px;
+  color: #b3b7bd;
+}
+
+.star.on .star-img { color: #e0a72c; }
+
+.empty {
+  padding: 24px 8px;
+  color: #71767e;
+  text-align: center;
+}

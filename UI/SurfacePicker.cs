@@ -84,7 +84,12 @@ namespace Clipwise.UI
                                           hostAssembly: typeof(SurfacePicker).Assembly);
 
                 _surface.OnCall("picker.view", _ => ViewJson(_view))
-                        .OnCall("picker.pick", Pick);
+                        .OnCall("picker.pick", Pick)
+                        .OnCall("picker.fav", Fav)
+                        // The only way out that does not choose something. A surface has no back gesture - right
+                        // click and Escape belong to the phone - so without this the picker can be opened and
+                        // never left except by picking, which is not a choice the player asked to be given.
+                        .OnCall("picker.back", _ => { Close(); return "ok"; });
 
                 if (!Surfaces.IsMounted(SurfaceId)) { Close(); return false; }
                 return true;
@@ -120,6 +125,16 @@ namespace Clipwise.UI
         {
             if (_view == null || _onPick == null) return "error";
 
+            // The None/Any line is not in Rows and its id is empty, so it has to be matched before the lookup or
+            // a pot set to "Any" could never be set back to it. Vanilla keeps the same option as the X tile.
+            if (string.IsNullOrEmpty(itemId) && _view.NoneRow != null)
+            {
+                Action<ItemDefinition> none = _onPick;
+                Close();
+                none(null);
+                return "ok";
+            }
+
             foreach (Row row in _view.Rows)
             {
                 if (!string.Equals(row.ItemId, itemId ?? string.Empty, StringComparison.Ordinal)) continue;
@@ -131,6 +146,19 @@ namespace Clipwise.UI
             }
 
             return "error";
+        }
+
+        /// <summary>
+        /// Star or unstar one item, and answer the state it ended in so the page does not have to guess.
+        ///
+        /// Written through <see cref="Prefs.UserPrefs"/> rather than kept in the page: a favourite is the player's,
+        /// not this picker's, and the uGUI card and this surface have to agree about it the moment either changes.
+        /// </summary>
+        private static string Fav(string itemId)
+        {
+            if (string.IsNullOrEmpty(itemId)) return "error";
+            Prefs.UserPrefs.ToggleFavourite(itemId);
+            return Prefs.UserPrefs.IsFavourite(itemId) ? "on" : "off";
         }
 
         // ---- the wire ---------------------------------------------------------------------------------------
@@ -158,6 +186,15 @@ namespace Clipwise.UI
             }
             sb.Append(']');
 
+            // "Any" or "None", when the field allows it. Sent apart from the rows because it belongs at the top
+            // whatever is being searched or sorted - it is the way out, not one of the choices.
+            sb.Append(",\"none\":");
+            if (view.NoneRow != null)
+                sb.Append("{\"name\":").Append(Quote(view.NoneRow.Title))
+                  .Append(",\"sel\":").Append(view.NoneRow.Selected ? "true" : "false").Append('}');
+            else
+                sb.Append("null");
+
             sb.Append(",\"rows\":[");
             bool first = true;
             foreach (Row row in view.Rows)
@@ -167,12 +204,42 @@ namespace Clipwise.UI
                 sb.Append("{\"id\":").Append(Quote(row.ItemId))
                   .Append(",\"name\":").Append(Quote(row.Title))
                   .Append(",\"tab\":").Append(Quote(row.CategoryKey))
-                  .Append(",\"note\":").Append(Quote(row.Selected ? "selected" : null))
+                  // What the registering mod wrote about this item - for a bred strain, the pair it came from.
+                  .Append(",\"note\":").Append(Quote(row.Description))
+                  // The page draws the game's own seeds and everything a mod added under separate headings, which
+                  // is the one split a player actually thinks in.
+                  .Append(",\"vanilla\":").Append(row.Facts != null && !row.Facts.IsModded ? "true" : "false")
+                  // Tier, or 0. Read off the tag rather than asked of the mod: a tag is what every mod already
+                  // sends, so sorting by tier costs nothing to support and works for the next one too.
+                  .Append(",\"tier\":").Append(TierOf(row))
+                  .Append(",\"fav\":").Append(Prefs.UserPrefs.IsFavourite(row.ItemId) ? "true" : "false")
+                  .Append(",\"sel\":").Append(row.Selected ? "true" : "false")
                   .Append('}');
             }
             sb.Append("]}");
 
             return sb.ToString();
+        }
+
+        /// <summary>
+        /// The number in a <c>...:tier/N</c> tag, or 0 when the item carries none.
+        ///
+        /// By convention rather than by contract - there is no tier field in the API - and that is on purpose:
+        /// every mod already sends tags, so the sort works for any of them without a new call to adopt.
+        /// </summary>
+        private static int TierOf(Row row)
+        {
+            if (row?.Tags == null) return 0;
+
+            foreach (string tag in row.Tags)
+            {
+                if (tag == null) continue;
+                int cut = tag.IndexOf(":tier/", StringComparison.Ordinal);
+                if (cut < 0) continue;
+                if (int.TryParse(tag.Substring(cut + 6), out int tier)) return tier;
+            }
+
+            return 0;
         }
 
         /// <summary>A JSON string, or <c>null</c>. Only the five escapes JSON requires plus control characters -

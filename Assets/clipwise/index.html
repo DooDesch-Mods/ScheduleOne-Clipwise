@@ -2,21 +2,18 @@
 
 <div class="card">
   <div class="head">
-    <span class="head-title" id="title">Pick an item</span>
+    <button class="back" id="back">&lt; Back</button>
+    <span class="head-title" id="title">Seed</span>
     <span class="head-count" id="count"></span>
   </div>
 
   <div class="rule"></div>
 
-  <div class="tabs" id="tabs"></div>
+  <input class="find" id="find" placeholder="Search" maxlength="40" data-typing>
 
-  <input class="find" id="find" placeholder="Type to narrow the list" maxlength="40" data-typing>
+  <div class="chips" id="chips"></div>
 
   <div class="list" id="rows"></div>
-
-  <div class="foot">
-    <span class="hint">Right-click or press Escape to go back</span>
-  </div>
 </div>
 
 <script src="app.js"></script>
