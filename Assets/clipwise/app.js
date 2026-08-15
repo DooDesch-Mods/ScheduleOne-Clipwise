@@ -9,12 +9,18 @@
   both are states this page has to survive: it draws the empty case rather than throwing on JSON.parse.
 
   NO SYMBOL GLYPHS ANYWHERE. Anything outside Latin-1 comes out as a box in the game's font, so an arrow is the
-  word "up" and a star is an asterisk that changes colour.
+  word "up" and a star is a picture.
+
+  TILES, NOT ROWS, because this replaces the game's own seed page and that page is a grid. A tile is sixty
+  pixels wide and holds a picture; everything a row used to say - the parents, the tier, the effects - moved
+  into the bubble that appears while the pointer is on it.
 */
 
 const $ = (id) => document.getElementById(id);
 
-let view = { title: 'Select', tabs: [], rows: [], none: null };
+const PER_ROW = 5;
+
+let view = { title: 'Select', tabs: [], rows: [], none: null, added: 'ADDED BY MODS' };
 let query = '';
 let mode = 'all';
 
@@ -37,15 +43,6 @@ function load() {
   } catch (err) {
     console.error('picker.view was not JSON: ' + err.message);
   }
-}
-
-/** The label the mod gave its own category, which is what the second heading should say. */
-function moddedLabel() {
-  const tabs = view.tabs || [];
-  for (const tab of tabs) {
-    if (tab.id !== 'vanilla' && tab.label) return tab.label.toUpperCase();
-  }
-  return 'ADDED BY MODS';
 }
 
 function visible() {
@@ -97,18 +94,66 @@ function renderChips() {
   }
 }
 
-/**
- * One pickable line: the star, then the name, what it came from and its tier.
- *
- * The star sits BESIDE the pick button rather than inside it. Nested, a click on the star would reach the row
- * as well and star the item on its way to selecting it.
- */
-function rowNode(row) {
-  const line = el('div', 'row' + (row.sel ? ' sel' : ''));
+/*
+  The floating bubble, which is the whole reason a tile can afford to say nothing.
+
+  Two halves and both are needed: mouseenter/mouseleave for WHEN, and `rect()` for WHERE. A CSS-only tooltip
+  cannot work here - a `:hover` rule may repaint a box but never lay one out - and `rect()` reports the last
+  render, so a node the script has only just created reads as zeroes.
+*/
+function bubble(anchor, row) {
+  let node = null;
+  const hide = () => { if (node) { node.remove(); node = null; } };
+
+  anchor.addEventListener('mouseenter', () => {
+    if (node) return;
+    const r = anchor.rect();
+    if (!r || !r.height) return;
+
+    node = el('div', 'bubble');
+    node.appendChild(el('div', 'bubble-name', row.name));
+    if (row.note) node.appendChild(el('div', 'bubble-line', row.note));
+    if (row.tier) node.appendChild(el('div', 'bubble-line', 'Tier ' + row.tier));
+    if (row.effects && row.effects.length) {
+      node.appendChild(el('div', 'bubble-line', row.effects.join(', ')));
+    }
+
+    // Beside the tile, and on whichever side has room. The card's own width is the only bound the page knows,
+    // so it is measured rather than assumed.
+    const card = document.body.rect();
+    const width = 168;
+    let left = r.x + r.width + 6;
+    if (card && left + width > card.width - 4) left = r.x - width - 6;
+    if (left < 4) left = 4;
+
+    node.style.left = Math.round(left) + 'px';
+    node.style.top = Math.round(r.y) + 'px';
+    node.style.width = width + 'px';
+    document.body.appendChild(node);
+  });
+
+  anchor.addEventListener('mouseleave', hide);
+  // A click re-renders the grid; a bubble left behind would hang over the new one.
+  anchor.addEventListener('click', hide);
+}
+
+/** One tile: the seed's picture, its star, and the bubble that carries the words. */
+function tileNode(row) {
+  const tile = el('div', 'tile' + (row.sel ? ' sel' : ''));
+
+  // A button, not a div: the engine wires a hit target unconditionally for button, a, input and textarea.
+  const pick = el('button', 'shot');
+  const shot = document.createElement('img');
+  shot.className = 'shot-img';
+  // Supplied by the mod at open time. When a conversion failed there is no picture behind this name, and the
+  // letters underneath are what the tile has left to identify itself with.
+  shot.src = 's1://icon/' + row.id;
+  pick.appendChild(shot);
+  pick.appendChild(el('span', 'shot-name', row.name));
+  pick.addEventListener('click', () => s1.call('picker.pick', row.id));
+  tile.appendChild(pick);
 
   const star = el('button', 'star' + (row.fav ? ' on' : ''));
-  // A picture, not a character: the game's font has no star, and anything outside Latin-1 paints as a box.
-  // It is drawn white and tinted through `color`, so one file serves both states.
   const glyph = document.createElement('img');
   glyph.className = 'star-img';
   glyph.src = 'star.png';
@@ -117,33 +162,45 @@ function rowNode(row) {
     row.fav = s1.call('picker.fav', row.id) === 'on';
     render();
   });
-  line.appendChild(star);
+  tile.appendChild(star);
 
-  // A button, not a div: the engine wires a hit target unconditionally for button, a, input and textarea.
-  const pick = el('button', 'pick');
-  pick.appendChild(el('span', 'row-name', row.name));
-  if (row.note) pick.appendChild(el('span', 'row-note', row.note));
-  pick.appendChild(el('span', 'row-tier', row.tier ? 'T' + row.tier : ''));
-  pick.addEventListener('click', () => s1.call('picker.pick', row.id));
-  line.appendChild(pick);
+  bubble(pick, row);
+  return tile;
+}
 
-  return line;
+/** A grid of tiles, five to a line. There is no wrapping here, so the lines are made rather than found. */
+function grid(box, rows) {
+  let line = null;
+  rows.forEach((row, i) => {
+    if (i % PER_ROW === 0) {
+      line = el('div', 'line');
+      box.appendChild(line);
+    }
+    line.appendChild(tileNode(row));
+  });
+
+  // The last line is short, and a stretched tile would be a different size from the rest of the grid.
+  if (line) {
+    for (let i = rows.length % PER_ROW; i > 0 && i < PER_ROW; i++) line.appendChild(el('div', 'tile hole'));
+  }
 }
 
 function renderRows() {
   const box = $('rows');
   box.replaceChildren();
 
-  // "Any" first and always, whatever is filtered: it is how a field is cleared, not one of the options.
+  // "Any" first and always, whatever is filtered: it is how a field is cleared, not one of the options. Drawn
+  // as the game draws it, a tile with a cross in it.
   if (view.none) {
-    const line = el('div', 'row' + (view.none.sel ? ' sel' : ''));
-    line.appendChild(el('span', 'star'));
-
-    const pick = el('button', 'pick');
-    pick.appendChild(el('span', 'row-name', view.none.name || 'None'));
+    const line = el('div', 'line');
+    const tile = el('div', 'tile' + (view.none.sel ? ' sel' : ''));
+    const pick = el('button', 'shot');
+    pick.appendChild(el('span', 'shot-cross', 'X'));
+    pick.appendChild(el('span', 'shot-name', view.none.name || 'None'));
     pick.addEventListener('click', () => s1.call('picker.pick', ''));
-    line.appendChild(pick);
-
+    tile.appendChild(pick);
+    line.appendChild(tile);
+    for (let i = 1; i < PER_ROW; i++) line.appendChild(el('div', 'tile hole'));
     box.appendChild(line);
   }
 
@@ -163,16 +220,16 @@ function renderRows() {
   // label standing over nothing.
   if (favs.length) {
     box.appendChild(el('div', 'section', 'FAVOURITES'));
-    for (const row of favs) box.appendChild(rowNode(row));
+    grid(box, favs);
   }
 
   if (vanilla.length) {
     box.appendChild(el('div', 'section', 'VANILLA SEEDS'));
-    for (const row of vanilla) box.appendChild(rowNode(row));
+    grid(box, vanilla);
   }
 
   if (modded.length) {
-    box.appendChild(el('div', 'section', moddedLabel()));
+    box.appendChild(el('div', 'section', (view.added || 'ADDED BY MODS').toUpperCase()));
 
     // A sub-heading per tier, and only for tiers that are actually in the list: a tier nobody has reached
     // yet must not announce itself by having an empty heading.
@@ -182,7 +239,7 @@ function renderRows() {
 
     for (const tier of tiers) {
       if (tier > 0 && tiers.length > 1) box.appendChild(el('div', 'section sub', 'TIER ' + tier));
-      for (const row of modded) if ((row.tier || 0) === tier) box.appendChild(rowNode(row));
+      grid(box, modded.filter((row) => (row.tier || 0) === tier));
     }
   }
 }

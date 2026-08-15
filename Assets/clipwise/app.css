@@ -117,7 +117,7 @@ body {
 }
 
 .section {
-  padding: 10px 2px 4px 2px;
+  padding: 8px 2px 4px 2px;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 1px;
@@ -132,60 +132,80 @@ body {
   color: #8b9098;
 }
 
-.row {
+/* ---- the grid -------------------------------------------------------------------------------------------- */
+
+/* One line of five. There is no wrapping in this engine, so the script cuts the lines and this only has to
+   lay one out. */
+.line {
   flex-direction: row;
-  align-items: center;
-  height: 34px;
-  border-bottom: 1px solid #c6c9cd;
+  gap: 6px;
+  margin-bottom: 6px;
 }
 
-.row.sel { background: #cfd2d6; }
-
-/* The whole line except the star. It is its own button so that starring an item and choosing it stay two
-   separate clicks. */
-.pick {
+.tile {
   flex: 1;
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  height: 34px;
-  padding: 0 8px;
+  height: 62px;
+  border: 1px solid #c6c9cd;
+  border-radius: 4px;
+  background: #e4e6e8;
+}
+
+/* Fills the last line so its tiles keep the width of every other line's. */
+.tile.hole {
+  border: 1px solid transparent;
   background: transparent;
-  color: #23262b;
-  text-align: left;
 }
 
-.pick:hover { background: #e4e6e8; }
+.tile.sel { border: 2px solid #3a3d42; }
 
-.row-name {
-  flex: 1;
+/* The whole tile is the target. The star sits on top of it rather than inside, so starring and choosing
+   stay two separate clicks. */
+.shot {
+  height: 60px;
+  padding: 4px 2px 2px 2px;
+  background: transparent;
+  align-items: center;
+}
+
+.shot:hover { background: #eef0f1; }
+
+.shot-img {
+  width: 34px;
+  height: 34px;
+}
+
+/* Under the picture, and the only thing identifying a tile whose icon could not be produced. Two short
+   lines of it beat one long one nobody can read. */
+.shot-name {
+  width: 100%;
+  font-size: 9px;
+  line-height: 10px;
+  color: #4a4f57;
+  text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.row-note {
-  width: 190px;
-  font-size: 12px;
-  color: #71767e;
-  text-align: right;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.row-tier {
-  width: 26px;
-  font-size: 11px;
-  font-weight: 700;
+/* The game draws the None option as an empty frame with a cross in it. */
+.shot-cross {
+  height: 34px;
+  font-size: 20px;
   color: #8b9098;
-  text-align: right;
+  text-align: center;
+  align-items: center;
 }
 
-/* A star that is always there, so a row does not change width when it is starred. */
+/* ---- the star -------------------------------------------------------------------------------------------- */
+
+/* Over the tile's top right corner. `position: fixed` is measured from the viewport, so this is placed by the
+   tile it sits in rather than by the page. */
 .star {
-  width: 24px;
-  height: 24px;
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 16px;
+  height: 16px;
   background: transparent;
   align-items: center;
   justify-content: center;
@@ -194,12 +214,36 @@ body {
 /* The picture is white; `color` tints it. Its size comes from CSS alone - the HTML width and height
    attributes never reach the layout, which runs without Unity and cannot read a PNG. */
 .star-img {
-  width: 13px;
-  height: 13px;
+  width: 11px;
+  height: 11px;
   color: #b3b7bd;
 }
 
 .star.on .star-img { color: #e0a72c; }
+
+/* ---- the hover bubble ------------------------------------------------------------------------------------ */
+
+/* Placed by the script from the tile's measured rectangle, so it needs to be out of the flow and nothing
+   else. */
+.bubble {
+  position: fixed;
+  padding: 6px 8px;
+  border: 1px solid #3a3d42;
+  border-radius: 4px;
+  background: #f2f3f4;
+}
+
+.bubble-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: #23262b;
+}
+
+.bubble-line {
+  font-size: 11px;
+  line-height: 14px;
+  color: #5a5f68;
+}
 
 .empty {
   padding: 24px 8px;

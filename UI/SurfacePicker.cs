@@ -33,10 +33,10 @@ namespace Clipwise.UI
         internal const string SurfaceId = "clipwise";
         private const string BundlePrefix = "Clipwise.Assets.clipwise";
 
-        /// <summary>The card is 540x620 in the uGUI picker and the vanilla clipboard is 546x751, so the short side
-        /// agrees. Passing it takes the phone's contract - the page is authored for 540 and scales with the panel -
-        /// rather than device pixels, which would make the page a different size on every resolution.</summary>
-        private const float DesignShortSide = 540f;
+        /// <summary>Only for a clipboard whose own card cannot be measured - see <see cref="Fit"/>. Matches the
+        /// uGUI picker's card, which is the size this page was drawn against before it had anything to copy.</summary>
+        private const float FallbackWidth = 540f;
+        private const float FallbackHeight = 620f;
 
         private static SurfaceHandle _surface;
         private static GameObject _host;
@@ -66,21 +66,15 @@ namespace Clipwise.UI
                 // wants an Il2CppReferenceArray<Il2CppSystem.Type> and a managed Type will not convert.
                 _host = new GameObject("CW_Surface");
                 var rect = _host.AddComponent<RectTransform>();
-                rect.SetParent(canvasRoot, false);
 
-                // Anchored to the middle rather than stretched: the card is a fixed size on a canvas that is not.
-                rect.anchorMin = new Vector2(0.5f, 0.5f);
-                rect.anchorMax = new Vector2(0.5f, 0.5f);
-                rect.pivot = new Vector2(0.5f, 0.5f);
-                rect.anchoredPosition = Vector2.zero;
-                rect.sizeDelta = new Vector2(540f, 620f);
+                float design = Fit(rect, canvasRoot);
                 _host.transform.SetAsLastSibling();
 
                 // Named, because the signature takes designShortSide BEFORE the assembly and swapping them is a
                 // silent mismatch rather than a compile error. Mount always hands a handle back, even when the
                 // host is absent - IsMounted is the question that has an answer.
                 _surface = Surfaces.Mount(rect, SurfaceId, BundlePrefix,
-                                          designShortSide: DesignShortSide,
+                                          designShortSide: design,
                                           hostAssembly: typeof(SurfacePicker).Assembly);
 
                 _surface.OnCall("picker.view", _ => ViewJson(_view))
@@ -92,6 +86,11 @@ namespace Clipwise.UI
                         .OnCall("picker.back", _ => { Close(); return "ok"; });
 
                 if (!Surfaces.IsMounted(SurfaceId)) { Close(); return false; }
+
+                // After the mount, because the page asks for its pictures as soon as it builds and the store has
+                // to have them by then. Cached across opens, so this is only slow the first time.
+                SurfaceIcons.Supply(SurfaceId, view);
+
                 return true;
             }
             catch (Exception e)
@@ -99,6 +98,64 @@ namespace Clipwise.UI
                 Core.Log.Warning("[Clipwise] surface picker failed to open: " + e.Message);
                 Close();
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// Put the host exactly where the game's own selection card sits, and answer the width the page should be
+        /// authored for.
+        ///
+        /// NOT a guess at a size. The first version anchored a fixed 540x620 to the middle of the root canvas, and
+        /// on a real clipboard it hung over the top and bottom edges of the board - the card it replaces is inset
+        /// inside the clipboard, not the size of it. `ItemSelector` is that card
+        /// (`ManagementInterface.ItemSelectorScreen`, ScheduleOne.UI.Management/ItemFieldUI.cs:96), so its own
+        /// RectTransform is the answer to both questions at once: where to sit, and how wide the page is.
+        ///
+        /// Parented to the card's PARENT rather than to the canvas root, because an anchored position means
+        /// nothing without the parent it is anchored in. Falls back to the old fixed rect when the card cannot be
+        /// found, which is a picker in the wrong place rather than no picker at all.
+        /// </summary>
+        private static float Fit(RectTransform rect, Transform canvasRoot)
+        {
+            rect.SetParent(canvasRoot, false);
+            rect.anchorMin = new Vector2(0.5f, 0.5f);
+            rect.anchorMax = new Vector2(0.5f, 0.5f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = Vector2.zero;
+            rect.sizeDelta = new Vector2(FallbackWidth, FallbackHeight);
+
+            try
+            {
+                ManagementInterface mi = Singleton<ManagementInterface>.Instance;
+                ItemSelector screen = mi != null ? mi.ItemSelectorScreen : null;
+                RectTransform card = screen != null ? screen.GetComponent<RectTransform>() : null;
+                if (card == null)
+                {
+                    Core.Log.Warning("[Clipwise] no ItemSelector card to measure - using " + FallbackWidth + "x" + FallbackHeight + ".");
+                    return FallbackWidth;
+                }
+
+                if (card.parent != null && card.parent.gameObject.activeInHierarchy)
+                    rect.SetParent(card.parent, false);
+
+                rect.anchorMin = card.anchorMin;
+                rect.anchorMax = card.anchorMax;
+                rect.pivot = card.pivot;
+                rect.anchoredPosition = card.anchoredPosition;
+                rect.sizeDelta = card.sizeDelta;
+                rect.localScale = card.localScale;
+
+                float width = card.rect.width;
+                Core.Log.Msg("[Clipwise] surface fitted to the game's card: "
+                             + width.ToString("0") + "x" + card.rect.height.ToString("0")
+                             + " under '" + (card.parent != null ? card.parent.name : "?") + "'.");
+
+                return width > 1f ? width : FallbackWidth;
+            }
+            catch (Exception e)
+            {
+                Core.Log.Warning("[Clipwise] could not measure the game's card: " + e.Message);
+                return FallbackWidth;
             }
         }
 
@@ -176,6 +233,11 @@ namespace Clipwise.UI
             var sb = new StringBuilder(1024);
             sb.Append("{\"title\":").Append(Quote(view.Title));
 
+            // The heading over everything a mod added, taken from the category its own rows are in. Worked out
+            // here rather than in the page: a category key is namespaced (`clipwise:vanilla`), and the page
+            // guessing at that shape printed the game's own seeds under the heading "VANILLA" twice.
+            sb.Append(",\"added\":").Append(Quote(AddedLabel(view)));
+
             sb.Append(",\"tabs\":[");
             for (int i = 0; i < view.Categories.Count; i++)
             {
@@ -214,11 +276,47 @@ namespace Clipwise.UI
                   .Append(",\"tier\":").Append(TierOf(row))
                   .Append(",\"fav\":").Append(Prefs.UserPrefs.IsFavourite(row.ItemId) ? "true" : "false")
                   .Append(",\"sel\":").Append(row.Selected ? "true" : "false")
+                  // What the hover bubble says beyond the name and the pair. Sent with the row rather than
+                  // fetched on hover: a bubble that has to ask before it can appear arrives after the pointer
+                  // has moved on.
+                  .Append(",\"effects\":").Append(Effects(row))
                   .Append('}');
             }
             sb.Append("]}");
 
             return sb.ToString();
+        }
+
+        /// <summary>This item's effects as a JSON array, or <c>[]</c>.</summary>
+        private static string Effects(Row row)
+        {
+            var list = row?.Facts?.Effects;
+            if (list == null || list.Count == 0) return "[]";
+
+            var sb = new StringBuilder(64);
+            sb.Append('[');
+            for (int i = 0; i < list.Count; i++)
+            {
+                if (i > 0) sb.Append(',');
+                sb.Append(Quote(list[i]));
+            }
+            return sb.Append(']').ToString();
+        }
+
+        /// <summary>
+        /// What to call the half of the list a mod contributed - its own category's label, or a plain fallback
+        /// when every row is the game's.
+        /// </summary>
+        private static string AddedLabel(View view)
+        {
+            foreach (Row row in view.Rows)
+            {
+                if (row.Facts == null || !row.Facts.IsModded) continue;
+                CategoryDef category = Catalog.GetCategory(row.CategoryKey);
+                if (category != null && !string.IsNullOrEmpty(category.Label)) return category.Label;
+            }
+
+            return "Added by mods";
         }
 
         /// <summary>

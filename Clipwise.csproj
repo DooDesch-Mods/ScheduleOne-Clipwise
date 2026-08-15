@@ -184,6 +184,11 @@
       <HintPath>$(GameManagedPath)/UnityEngine.UIModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <!-- EncodeToPNG, for turning an item's icon into something the surface's page can draw. -->
+    <Reference Include="UnityEngine.ImageConversionModule">
+      <HintPath>$(GameManagedPath)/UnityEngine.ImageConversionModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="UnityEngine.IMGUIModule">
       <HintPath>$(GameManagedPath)/UnityEngine.IMGUIModule.dll</HintPath>
       <Private>false</Private>
