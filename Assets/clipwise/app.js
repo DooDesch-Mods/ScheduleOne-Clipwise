@@ -20,20 +20,20 @@ const $ = (id) => document.getElementById(id);
 
 const PER_ROW = 5;
 
-let view = { title: 'Select', tabs: [], rows: [], none: null, added: 'ADDED BY MODS' };
+let view = { title: 'Select', tabs: [], rows: [], none: null, added: 'ADDED BY MODS', tags: [] };
 let query = '';
-let mode = 'all';
 
-/* All six, in the order they sit on the bar. `bred` is the other half of `vanilla`: the spec asks for a vanilla
-   toggle that shows the game's seeds when on and the mod's when off, and a bar cannot be half a toggle. */
-const MODES = [
-  { id: 'all', label: 'All' },
-  { id: 'tierup', label: 'Tier up' },
-  { id: 'tierdown', label: 'Tier down' },
-  { id: 'fav', label: 'Favourites' },
-  { id: 'vanilla', label: 'Vanilla' },
-  { id: 'bred', label: 'Bred' },
-];
+/*
+  Filters are independent toggles, not one choice out of a list, because that is what they were before this
+  screen was rebuilt: a player who wants their favourites of one tier picks both.
+*/
+let f = { fav: false, disc: false, hidden: false, vanilla: false, bred: false, tags: [] };
+
+/* One chip cycles through these. Index 0 keeps the order the mod supplied, which is the only order that means
+   anything to the mod that supplied it. */
+const SORTS = ['Sort: default', 'Sort: A-Z', 'Sort: yield', 'Sort: growth', 'Sort: value',
+               'Sort: tier up', 'Sort: tier down'];
+let sort = 0;
 
 function load() {
   const raw = s1.call('picker.view');
@@ -42,16 +42,36 @@ function load() {
     view = JSON.parse(raw);
   } catch (err) {
     console.error('picker.view was not JSON: ' + err.message);
+    return;
   }
+
+  // Opened the way it was left. These three are the player's settings, kept on the mod's side.
+  sort = view.sort || 0;
+  f.fav = !!view.onlyFav;
+  f.disc = !!view.onlyDisc;
+}
+
+/** Push the three settings that outlive one open back to the mod. */
+function remember() {
+  s1.call('picker.state', sort + '|' + (f.fav ? 1 : 0) + '|' + (f.disc ? 1 : 0));
 }
 
 function visible() {
   const q = query.trim().toLowerCase();
 
   let rows = (view.rows || []).filter((row) => {
-    if (mode === 'fav' && !row.fav) return false;
-    if (mode === 'vanilla' && !row.vanilla) return false;
-    if (mode === 'bred' && row.vanilla) return false;
+    // The current selection is always reachable. Filtering it away would leave the player unable to see what
+    // the field is even set to.
+    if (row.sel) return true;
+
+    if (!f.hidden && row.hidden) return false;
+    if (f.fav && !row.fav) return false;
+    if (f.disc && row.disc === false) return false;
+    if (f.vanilla && !row.vanilla) return false;
+    if (f.bred && row.vanilla) return false;
+
+    for (const tag of f.tags) if ((row.tags || []).indexOf(tag) < 0) return false;
+
     if (!q) return true;
     return (
       (row.name || '').toLowerCase().indexOf(q) >= 0 ||
@@ -59,18 +79,28 @@ function visible() {
     );
   });
 
-  // Sorted on a copy. The order the mod supplied is the default and has to survive a filter being switched off.
-  if (mode === 'tierup' || mode === 'tierdown') {
-    const dir = mode === 'tierup' ? 1 : -1;
-    rows = rows.slice().sort((a, b) => {
-      if ((a.tier || 0) !== (b.tier || 0)) return ((a.tier || 0) - (b.tier || 0)) * dir;
-      const an = (a.name || '').toLowerCase();
-      const bn = (b.name || '').toLowerCase();
-      return an < bn ? -1 : an > bn ? 1 : 0;
-    });
-  }
-
+  if (sort > 0) rows = rows.slice().sort(compare);
   return rows;
+}
+
+function byName(a, b) {
+  const an = (a.name || '').toLowerCase();
+  const bn = (b.name || '').toLowerCase();
+  return an < bn ? -1 : an > bn ? 1 : 0;
+}
+
+/** Ties always fall back to the name, so a sort is stable to look at rather than merely stable in memory. */
+function compare(a, b) {
+  let r = 0;
+  switch (sort) {
+    case 1: r = byName(a, b); break;
+    case 2: r = (b.yield || 0) - (a.yield || 0); break;          // biggest first
+    case 3: r = (a.growth || 0) - (b.growth || 0); break;        // fastest first
+    case 4: r = (b.value || 0) - (a.value || 0); break;          // most valuable first
+    case 5: r = (a.tier || 0) - (b.tier || 0); break;
+    case 6: r = (b.tier || 0) - (a.tier || 0); break;
+  }
+  return r !== 0 ? r : byName(a, b);
 }
 
 function el(kind, cls, text) {
@@ -84,13 +114,26 @@ function renderChips() {
   const box = $('chips');
   box.replaceChildren();
 
-  for (const entry of MODES) {
-    const button = el('button', 'chip' + (entry.id === mode ? ' on' : ''), entry.label);
-    button.addEventListener('click', () => {
-      mode = entry.id;
-      render();
-    });
+  const toggle = (label, on, act) => {
+    const button = el('button', 'chip' + (on ? ' on' : ''), label);
+    button.addEventListener('click', () => { act(); render(); });
     box.appendChild(button);
+  };
+
+  toggle('Favourites', f.fav, () => { f.fav = !f.fav; remember(); });
+  toggle('Discovered', f.disc, () => { f.disc = !f.disc; remember(); });
+  if (view.hiddenCount || f.hidden) {
+    toggle('Hidden (' + (view.hiddenCount || 0) + ')', f.hidden, () => { f.hidden = !f.hidden; });
+  }
+  toggle('Vanilla', f.vanilla, () => { f.vanilla = !f.vanilla; f.bred = false; });
+  toggle('Bred', f.bred, () => { f.bred = !f.bred; f.vanilla = false; });
+  toggle(SORTS[sort] || SORTS[0], sort !== 0, () => { sort = (sort + 1) % SORTS.length; remember(); });
+
+  for (const tag of view.tags || []) {
+    toggle(tag.label, f.tags.indexOf(tag.id) >= 0, () => {
+      const at = f.tags.indexOf(tag.id);
+      if (at >= 0) f.tags.splice(at, 1); else f.tags.push(tag.id);
+    });
   }
 }
 
@@ -164,7 +207,19 @@ function tileNode(row) {
   });
   tile.appendChild(star);
 
-  bubble(pick, row);
+  // Only while the Hidden chip is on. A tile is sixty pixels wide and cannot carry two permanent buttons, and
+  // hiding things is a tidying-up job rather than something done in passing.
+  if (f.hidden) {
+    const hide = el('button', 'hide' + (row.hidden ? ' on' : ''), row.hidden ? 'o' : 'x');
+    hide.addEventListener('click', () => {
+      row.hidden = s1.call('picker.hide', row.id) === 'on';
+      view.hiddenCount = (view.hiddenCount || 0) + (row.hidden ? 1 : -1);
+      render();
+    });
+    tile.appendChild(hide);
+  }
+
+  if (view.tips !== false) bubble(pick, row);
   return tile;
 }
 
@@ -235,7 +290,7 @@ function renderRows() {
     // yet must not announce itself by having an empty heading.
     const tiers = [];
     for (const row of modded) if (tiers.indexOf(row.tier || 0) < 0) tiers.push(row.tier || 0);
-    tiers.sort((a, b) => (mode === 'tierdown' ? b - a : a - b));
+    tiers.sort((a, b) => (sort === 6 ? b - a : a - b));
 
     for (const tier of tiers) {
       if (tier > 0 && tiers.length > 1) box.appendChild(el('div', 'section sub', 'TIER ' + tier));

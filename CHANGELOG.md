@@ -7,6 +7,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Changed
+
+- **Clipwise now needs [Sideload](https://thunderstore.io/c/schedule-i/p/DooDesch/Sideload/).** Without it the clipboard keeps the game's own grid, exactly as if the mod were not installed.
+- The picker is drawn as a Sideload page instead of hand-built uGUI, so it looks like the clipboard page it replaces rather than like a mod menu.
+- Hiding an entry moved behind the Hidden chip. A tile is sixty pixels wide and cannot carry two permanent buttons.
+
+### Removed
+
+- The built-in uGUI card and its tooltip, 948 lines of them. They were the same screen twice: every change cost double, and the card never did look like the page it replaces.
+
 ### Added
 
 - The Sideload picker looks like the vanilla clipboard page it replaces, and adds a search box and a filter bar: all, tier up, tier down, favourites, vanilla, bred.

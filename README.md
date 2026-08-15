@@ -68,7 +68,11 @@ the last word. The folder gets a commented example on first launch.
 
 1. [MelonLoader](https://melonwiki.xyz/) 0.7.3+
 2. [S1API](https://thunderstore.io/c/schedule-i/p/ifBars/S1API_Forked/)
-3. Drop `Clipwise.dll` into `Schedule I/Mods/`
+3. [Sideload](https://thunderstore.io/c/schedule-i/p/DooDesch/Sideload/) 1.31.0+
+4. Drop `Clipwise.dll` into `Schedule I/Mods/`
+
+Without Sideload the clipboard keeps the game's own item grid: Clipwise draws its picker as a Sideload page,
+so there is nothing for it to draw with.
 
 Settings live in `UserData/MelonPreferences.cfg` under `[Clipwise]`. Favourites and hidden entries live in
 `UserData/Clipwise/preferences.json`. Neither touches your save, and neither is shared in co-op: what you

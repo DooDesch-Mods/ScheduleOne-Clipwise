@@ -20,7 +20,6 @@ namespace Clipwise.Config
         private static MelonPreferences_Entry<bool> _tooltips;
         private static MelonPreferences_Entry<bool> _onlyDiscoveredDefault;
         private static MelonPreferences_Entry<bool> _verbose;
-        private static MelonPreferences_Entry<bool> _surfacePicker;
 
         /// <summary>Master switch. Off = the field click is never intercepted and vanilla runs untouched.</summary>
         internal static bool Enabled => _enabled?.Value ?? true;
@@ -39,10 +38,6 @@ namespace Clipwise.Config
         /// <summary>Log every classification decision. Loud - for diagnosing a mod that lands in the wrong tab.</summary>
         internal static bool Verbose => _verbose?.Value ?? false;
 
-        /// <summary>Draw the picker as a Sideload surface instead of the hand-built uGUI card. OFF: it is a spike,
-        /// and it does not yet do tag chips, hidden items or the hover tooltip.</summary>
-        internal static bool SurfacePicker => _surfacePicker?.Value ?? false;
-
         internal static void Initialize()
         {
             _cat = MelonPreferences.CreateCategory(Category, "Clipwise");
@@ -57,8 +52,6 @@ namespace Clipwise.Config
                 description: "Start the picker with the \"only discovered\" filter already on.");
             _verbose = _cat.CreateEntry("Verbose", false,
                 description: "Log how every item was classified. Useful when a mod's items land in the wrong tab.");
-            _surfacePicker = _cat.CreateEntry("SurfacePicker", false,
-                description: "Experimental: draw the picker as the vanilla clipboard page, with Sideload instead of the built-in card. Needs Sideload installed. Missing features: tag chips, hidden items, tooltips.");
         }
     }
 }

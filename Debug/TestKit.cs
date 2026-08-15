@@ -25,8 +25,7 @@ namespace Clipwise.Debugging
     ///   cwauto        what the classifier alone makes of the current seed list
     ///   cwreload      re-read the override files and the user preferences
     ///   cwopen        open the picker on the seed list without a clipboard
-    ///   cwtab [key]   switch the open picker's tab (no arg = All); reports how many rows survive
-    ///   cwsearch [q]  set the open picker's search text; reports how many rows survive
+    ///   cwtab, cwsearch   both print how to filter the page instead - see Filtering()
     ///
     /// The console needs <c>Settings.ConsoleEnabled</c> and the player being the host
     /// (ScheduleOne.UI/ConsoleUI.cs:25-33). That flag is a live toggle in the in-game settings window
@@ -81,8 +80,8 @@ namespace Clipwise.Debugging
                     case "cwreload": Reload(); break;
                     case "cwopen": Open(); break;
                     case "cwvanilla": Vanilla(); break;
-                    case "cwtab": Tab(parts.Length > 1 ? parts[1] : ""); break;
-                    case "cwsearch": Search(parts.Length > 1 ? string.Join(" ", parts, 1, parts.Length - 1) : ""); break;
+                    case "cwtab":
+                    case "cwsearch": Filtering(); break;
                 }
             }
             catch (Exception e) { Complain("[Clipwise] console command failed: " + e.Message); }
@@ -271,9 +270,9 @@ namespace Clipwise.Debugging
             if (canvasRoot == null) { Complain("Clipwise: no overlay canvas found to draw on."); return; }
 
             View view = ViewBuilder.Build("Seeds (cwopen)", seeds, null, false, "None");
-            bool ok = ItemPicker.TryOpen(canvasRoot, view, item =>
+            bool ok = SurfacePicker.TryOpen(canvasRoot, view, item =>
                 Say("Clipwise: cwopen picked " + (item != null ? item.ID : "(none)")));
-            if (!ok) Complain("Clipwise: the picker refused to open - see the log.");
+            if (!ok) Complain("Clipwise: the picker refused to open - is Sideload installed? See the log.");
         }
 
         /// <summary>
@@ -319,37 +318,20 @@ namespace Clipwise.Debugging
             Say($"Clipwise: opened the vanilla selector with {options.Count} option(s).");
         }
 
-        /// <summary>Switch the open picker to a tab. Accepts a full category key, a substring of one, or nothing
-        /// for the All tab; with no match it lists what is on offer instead of failing silently.</summary>
-        private static void Tab(string wanted)
+        /// <summary>
+        /// Where the filtering went.
+        ///
+        /// `cwtab` and `cwsearch` used to reach into the uGUI card and set its fields. That card is gone and the
+        /// filtering is in the page, which is a script engine - so the way to drive it is to run script in it,
+        /// and the MCP already has a tool for exactly that. Printing the replacement beats leaving two commands
+        /// that report on a screen nobody is looking at.
+        /// </summary>
+        private static void Filtering()
         {
-            if (!ItemPicker.IsOpen) { Complain("Clipwise: no picker open - run cwopen first."); return; }
-
-            List<string> keys = ItemPicker.TabKeys();
-            string target = null;
-            if (string.IsNullOrEmpty(wanted)) target = "";
-            else
-                foreach (string k in keys)
-                    if (k.Length > 0 && k.IndexOf(wanted, StringComparison.OrdinalIgnoreCase) >= 0) { target = k; break; }
-
-            if (target == null)
-            {
-                var sb = new StringBuilder();
-                sb.Append("Clipwise: no tab matches '").Append(wanted).AppendLine("'. Available:");
-                foreach (string k in keys) sb.Append("  ").AppendLine(k.Length == 0 ? "(all)" : k);
-                Complain(sb.ToString());
-                return;
-            }
-
-            ItemPicker.SetFilter(target, null);
-            Say($"Clipwise: tab '{(target.Length == 0 ? "(all)" : target)}' -> {ItemPicker.VisibleCount} row(s) visible.");
-        }
-
-        private static void Search(string query)
-        {
-            if (!ItemPicker.IsOpen) { Complain("Clipwise: no picker open - run cwopen first."); return; }
-            ItemPicker.SetFilter(null, query);
-            Say($"Clipwise: search '{query}' -> {ItemPicker.VisibleCount} row(s) visible.");
+            Say("Clipwise: the picker filters in its page now, so drive it there:");
+            Say("  sideload_eval clipwise \"query = 'og'; render()\"");
+            Say("  sideload_eval clipwise \"f.fav = true; render()\"");
+            Say("  sideload_eval clipwise \"console.log(visible().length + ' row(s) visible')\"");
         }
 
         // ---- helpers --------------------------------------------------------------------------------------
