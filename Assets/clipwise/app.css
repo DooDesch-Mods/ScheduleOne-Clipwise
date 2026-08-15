@@ -79,15 +79,22 @@ body {
   align-items: center;
 }
 
+/* The filter bar scrolls sideways rather than running off the card. There are nine chips at most and no
+   wrapping in this engine, so the alternative is the last two hanging over the edge - which is what happened. */
 .chips {
   flex-direction: row;
   align-items: center;
   gap: 6px;
   margin: 10px 0 8px 0;
+  height: 26px;
+  min-height: 26px;
+  overflow: auto;
 }
 
 .chip {
   height: 24px;
+  /* Never squeezed to fit the bar: a chip narrower than its word is a chip with half a word in it. */
+  flex-shrink: 0;
   padding: 0 10px;
   border: 1px solid #a9adb4;
   border-radius: 12px;

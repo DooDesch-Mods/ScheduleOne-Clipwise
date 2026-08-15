@@ -131,32 +131,44 @@ namespace Clipwise.UI
                 ManagementInterface mi = Singleton<ManagementInterface>.Instance;
                 ItemSelector screen = mi != null ? mi.ItemSelectorScreen : null;
                 RectTransform card = screen != null ? screen.GetComponent<RectTransform>() : null;
-                if (card == null)
+
+                if (card == null || card.parent == null)
                 {
-                    Core.Log.Warning("[Clipwise] no ItemSelector card to measure - using " + FallbackWidth + "x" + FallbackHeight + ".");
+                    Core.Log.Warning("[Clipwise] no ItemSelector card to sit in - using " + FallbackWidth + "x" + FallbackHeight + ".");
                     return FallbackWidth;
                 }
 
-                if (card.parent != null && card.parent.gameObject.activeInHierarchy)
-                    rect.SetParent(card.parent, false);
+                RectTransform holder = card.parent as RectTransform;
+                if (holder == null || !holder.gameObject.activeInHierarchy)
+                {
+                    Core.Log.Warning("[Clipwise] the ItemSelector's holder is not on screen - using the fallback size.");
+                    return FallbackWidth;
+                }
 
-                rect.anchorMin = card.anchorMin;
-                rect.anchorMax = card.anchorMax;
-                rect.pivot = card.pivot;
-                rect.anchoredPosition = card.anchoredPosition;
-                rect.sizeDelta = card.sizeDelta;
-                rect.localScale = card.localScale;
+                // STRETCHED INTO THE HOLDER, not copied off the card.
+                //
+                // Copying the card's anchors and size was the first attempt and it put the page beside the
+                // clipboard rather than on it: an anchoredPosition means nothing without the anchors it was
+                // measured against, and the card carries a layout of its own that this object does not have.
+                // Filling the same box the vanilla screen fills asks no questions about any of that.
+                rect.SetParent(holder, false);
+                rect.anchorMin = Vector2.zero;
+                rect.anchorMax = Vector2.one;
+                rect.pivot = new Vector2(0.5f, 0.5f);
+                rect.offsetMin = Vector2.zero;
+                rect.offsetMax = Vector2.zero;
+                rect.localScale = Vector3.one;
+                rect.localRotation = Quaternion.identity;
 
-                float width = card.rect.width;
-                Core.Log.Msg("[Clipwise] surface fitted to the game's card: "
-                             + width.ToString("0") + "x" + card.rect.height.ToString("0")
-                             + " under '" + (card.parent != null ? card.parent.name : "?") + "'.");
+                float width = holder.rect.width;
+                Core.Log.Msg("[Clipwise] surface fills '" + holder.name + "' at "
+                             + width.ToString("0") + "x" + holder.rect.height.ToString("0") + ".");
 
                 return width > 1f ? width : FallbackWidth;
             }
             catch (Exception e)
             {
-                Core.Log.Warning("[Clipwise] could not measure the game's card: " + e.Message);
+                Core.Log.Warning("[Clipwise] could not place the surface: " + e.Message);
                 return FallbackWidth;
             }
         }

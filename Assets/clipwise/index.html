@@ -9,7 +9,10 @@
 
   <div class="rule"></div>
 
-  <input class="find" id="find" placeholder="Search" maxlength="40" data-typing>
+  <!-- No data-typing. It keeps the caret in this field whenever nothing else holds one, and a caret in a
+       field is what stops the GAME seeing keys at all - including the Escape that closes this page. Click
+       the box to type. -->
+  <input class="find" id="find" placeholder="Search" maxlength="40">
 
   <div class="chips" id="chips"></div>
 

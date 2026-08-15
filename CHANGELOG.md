@@ -27,7 +27,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
-- The Sideload picker is the size of the card it replaces. It was a fixed 540x620 in the middle of the screen, which hung over the top and bottom of the clipboard.
+- The keyboard reaches the game again while the picker is open. The search box held the caret whenever nothing else did, and a caret in a field is what stops the game seeing keys - including the Escape that closes the picker. Click the box to type.
+- The picker fills the box the game's own selection screen fills. It was a fixed 540x620 in the middle of the screen, and then a copy of the card's position - which put it beside the clipboard, because a position means nothing without the anchors it was measured against.
+- The filter bar scrolls sideways instead of running its last chips off the edge of the card.
 - The heading over a mod's own seeds says what the mod called them. It read "VANILLA" over both halves.
 - The Sideload picker offers "Any" again. It was missing, so a pot set to Any could not be set back to it.
 
