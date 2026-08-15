@@ -100,6 +100,36 @@
   <Import Project="$(MSBuildThisFileDirectory)../Workspace/build/Deploy.props" Condition="Exists('$(MSBuildThisFileDirectory)../Workspace/build/Deploy.props')" />
   <Import Project="$(MSBuildThisFileDirectory)Workspace/build/Deploy.props" Condition="Exists('$(MSBuildThisFileDirectory)Workspace/build/Deploy.props')" />
 
+  <!--
+    THE SIDELOAD SURFACE. Clipwise draws its picker by hand in uGUI today; a surface is the same page engine the
+    phone runs, mounted into a RectTransform this mod owns. Wiring it costs one linked source file and one
+    embedded folder - no reference to Sideload itself, so the mod still loads when Sideload is absent and every
+    Surfaces call is a no-op there.
+
+    Where the shim lives: the Sideload repo next door (the normal case), the old root location, or the CI build
+    libs. Same three conditions as every other mod that compiles it in.
+  -->
+  <PropertyGroup>
+    <SideloadShimPath Condition="Exists('$(MSBuildThisFileDirectory)../Sideload/Sideload.Api/Sideload.cs')">$(MSBuildThisFileDirectory)../Sideload/Sideload.Api/Sideload.cs</SideloadShimPath>
+    <SideloadShimPath Condition="'$(SideloadShimPath)' == '' And Exists('$(MSBuildThisFileDirectory)../Sideload.Api/Sideload.cs')">$(MSBuildThisFileDirectory)../Sideload.Api/Sideload.cs</SideloadShimPath>
+    <SideloadShimPath Condition="'$(SideloadShimPath)' == '' And Exists('$(WorkspaceLibPath)/sideload-api/Sideload.cs')">$(WorkspaceLibPath)/sideload-api/Sideload.cs</SideloadShimPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Condition="'$(SideloadShimPath)' != ''" Include="$(SideloadShimPath)" Link="Sideload.Api.cs" />
+  </ItemGroup>
+
+  <!--
+    The page. The LogicalName prefix IS the bundlePrefix handed to Surfaces.Mount, and it is load-bearing:
+    without it MSBuild folds the folder name into the resource name, the bundle resolves to nothing, and the
+    surface mounts as a blank rectangle with no error anywhere.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="Assets/clipwise/*">
+      <LogicalName>Clipwise.Assets.clipwise.%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
   <!-- Mod loader references (both backends) -->
   <ItemGroup>
     <Reference Include="MelonLoader">
@@ -152,6 +182,11 @@
     </Reference>
     <Reference Include="UnityEngine.UIModule">
       <HintPath>$(GameManagedPath)/UnityEngine.UIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- EncodeToPNG, for turning an item's icon into something the surface's page can draw. -->
+    <Reference Include="UnityEngine.ImageConversionModule">
+      <HintPath>$(GameManagedPath)/UnityEngine.ImageConversionModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.IMGUIModule">

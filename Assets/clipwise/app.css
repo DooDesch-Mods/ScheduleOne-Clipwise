@@ -1,0 +1,252 @@
+/*
+  The vanilla clipboard's own seed page, with a search box and a filter added to it.
+
+  COLOURS ARE VANILLA'S, not this mod's. The card is the game's light paper grey, the type is near-black and
+  nothing is tinted. A dark picker floating on a wooden board reads as a different game, and the whole point of
+  #69 is that this page should look like the one it replaces.
+
+  Sideload's CSS is a subset: no z-index, no hsl(), px and % only. Every box is a flex container and the DEFAULT
+  direction is COLUMN, so a row has to say so.
+*/
+
+body {
+  /* Required. The percentage heights below need a definite basis and the root is auto-height. */
+  height: 100%;
+  font-family: game-ui;
+  font-size: 15px;
+  color: #23262b;
+}
+
+.card {
+  height: 100%;
+  padding: 18px 20px 16px 20px;
+  background: #d7d9dc;
+}
+
+/* ---- head ------------------------------------------------------------------------------------------------ */
+
+.head {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  height: 30px;
+}
+
+.back {
+  width: 92px;
+  height: 26px;
+  font-size: 17px;
+  font-weight: 700;
+  color: #23262b;
+  background: transparent;
+  align-items: center;
+}
+
+.back:hover { color: #5a5f68; }
+
+.head-title {
+  font-size: 19px;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* Balances the Back button so the title sits in the middle of the card rather than the middle of what is left. */
+.head-count {
+  width: 92px;
+  font-size: 12px;
+  color: #6b7079;
+  text-align: right;
+  align-items: center;
+}
+
+/* Vanilla draws a hand-inked stroke here rather than a border. A 2px rule is the closest the subset gets; the
+   real one is a sprite and would have to be shipped as a PNG. */
+.rule {
+  height: 2px;
+  margin: 8px 0 12px 0;
+  background: #3a3d42;
+}
+
+/* ---- search and filter ----------------------------------------------------------------------------------- */
+
+.find {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid #a9adb4;
+  border-radius: 4px;
+  background: #e9eaec;
+  color: #23262b;
+  align-items: center;
+}
+
+.chips {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 8px 0;
+}
+
+.chip {
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid #a9adb4;
+  border-radius: 12px;
+  background: #e9eaec;
+  color: #4a4f57;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  align-items: center;
+}
+
+.chip:hover { background: #f2f3f4; }
+
+.chip.on {
+  background: #3a3d42;
+  border: 1px solid #3a3d42;
+  color: #f2f3f4;
+}
+
+/* ---- the list -------------------------------------------------------------------------------------------- */
+
+.list {
+  flex: 1;
+  /* Without this the list never shrinks and so never scrolls. */
+  min-height: 0;
+  overflow: auto;
+}
+
+.section {
+  padding: 8px 2px 4px 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #6b7079;
+}
+
+/* A tier inside the mod's own section. Indented and lighter, so it reads as a division of the heading
+   above it rather than another heading of the same rank. */
+.section.sub {
+  padding: 6px 2px 2px 14px;
+  font-size: 10px;
+  color: #8b9098;
+}
+
+/* ---- the grid -------------------------------------------------------------------------------------------- */
+
+/* One line of five. There is no wrapping in this engine, so the script cuts the lines and this only has to
+   lay one out. */
+.line {
+  flex-direction: row;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.tile {
+  flex: 1;
+  height: 62px;
+  border: 1px solid #c6c9cd;
+  border-radius: 4px;
+  background: #e4e6e8;
+}
+
+/* Fills the last line so its tiles keep the width of every other line's. */
+.tile.hole {
+  border: 1px solid transparent;
+  background: transparent;
+}
+
+.tile.sel { border: 2px solid #3a3d42; }
+
+/* The whole tile is the target. The star sits on top of it rather than inside, so starring and choosing
+   stay two separate clicks. */
+.shot {
+  height: 60px;
+  padding: 4px 2px 2px 2px;
+  background: transparent;
+  align-items: center;
+}
+
+.shot:hover { background: #eef0f1; }
+
+.shot-img {
+  width: 34px;
+  height: 34px;
+}
+
+/* Under the picture, and the only thing identifying a tile whose icon could not be produced. Two short
+   lines of it beat one long one nobody can read. */
+.shot-name {
+  width: 100%;
+  font-size: 9px;
+  line-height: 10px;
+  color: #4a4f57;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The game draws the None option as an empty frame with a cross in it. */
+.shot-cross {
+  height: 34px;
+  font-size: 20px;
+  color: #8b9098;
+  text-align: center;
+  align-items: center;
+}
+
+/* ---- the star -------------------------------------------------------------------------------------------- */
+
+/* Over the tile's top right corner. `position: fixed` is measured from the viewport, so this is placed by the
+   tile it sits in rather than by the page. */
+.star {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 16px;
+  height: 16px;
+  background: transparent;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The picture is white; `color` tints it. Its size comes from CSS alone - the HTML width and height
+   attributes never reach the layout, which runs without Unity and cannot read a PNG. */
+.star-img {
+  width: 11px;
+  height: 11px;
+  color: #b3b7bd;
+}
+
+.star.on .star-img { color: #e0a72c; }
+
+/* ---- the hover bubble ------------------------------------------------------------------------------------ */
+
+/* Placed by the script from the tile's measured rectangle, so it needs to be out of the flow and nothing
+   else. */
+.bubble {
+  position: fixed;
+  padding: 6px 8px;
+  border: 1px solid #3a3d42;
+  border-radius: 4px;
+  background: #f2f3f4;
+}
+
+.bubble-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: #23262b;
+}
+
+.bubble-line {
+  font-size: 11px;
+  line-height: 14px;
+  color: #5a5f68;
+}
+
+.empty {
+  padding: 24px 8px;
+  color: #71767e;
+  text-align: center;
+}
