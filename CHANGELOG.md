@@ -29,7 +29,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - The keyboard reaches the game again while the picker is open. The search box held the caret whenever nothing else did, and a caret in a field is what stops the game seeing keys - including the Escape that closes the picker. Click the box to type.
 - The picker fills the box the game's own selection screen fills. It was a fixed 540x620 in the middle of the screen, and then a copy of the card's position - which put it beside the clipboard, because a position means nothing without the anchors it was measured against.
-- The filter bar scrolls sideways instead of running its last chips off the edge of the card.
+- The filter bar fits the card. A chip per effect ran off the edge as soon as a mod declared more than a handful; a tag group is a drop-down with tick boxes now, and there is a Clear button when anything is on.
+- One hover bubble for the page instead of one per tile. A mouseleave that never arrived left the old ones on screen - five at once in a tester's shot.
+- A tile carries its picture and nothing else, the way the game's own does. The name is in the bubble.
+- The Discovered filter is gone. Only discovered seeds reach this page, so it never removed anything.
 - The heading over a mod's own seeds says what the mod called them. It read "VANILLA" over both halves.
 - The Sideload picker offers "Any" again. It was missing, so a pot set to Any could not be set back to it.
 

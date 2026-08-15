@@ -114,6 +114,58 @@ body {
   color: #f2f3f4;
 }
 
+/* ---- the open drop-down ------------------------------------------------------------------------------- */
+
+/* Under the bar, never over the grid: a list that covers what it filters has to be dismissed before the
+   result can be seen. Capped and scrolling, because a mod may declare thirty effects. */
+.drop {
+  max-height: 108px;
+  overflow: auto;
+  margin-bottom: 8px;
+  padding: 4px;
+  border: 1px solid #a9adb4;
+  border-radius: 4px;
+  background: #e9eaec;
+}
+
+.drop.closed { display: none; }
+
+.tick {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 4px;
+  background: transparent;
+  color: #4a4f57;
+  font-size: 12px;
+  text-align: left;
+}
+
+.tick:hover { background: #f2f3f4; }
+
+.tick-box {
+  width: 13px;
+  height: 13px;
+  border: 1px solid #8b9098;
+  border-radius: 2px;
+  background: #f7f8f9;
+  color: #23262b;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+  align-items: center;
+}
+
+.tick.on .tick-box { background: #3a3d42; color: #f2f3f4; }
+
+.tick-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ---- the list -------------------------------------------------------------------------------------------- */
 
 .list {
@@ -176,22 +228,10 @@ body {
 
 .shot:hover { background: #eef0f1; }
 
+/* The tile carries a picture and nothing else, the way the game's own does. The words are in the bubble. */
 .shot-img {
-  width: 34px;
-  height: 34px;
-}
-
-/* Under the picture, and the only thing identifying a tile whose icon could not be produced. Two short
-   lines of it beat one long one nobody can read. */
-.shot-name {
-  width: 100%;
-  font-size: 9px;
-  line-height: 10px;
-  color: #4a4f57;
-  text-align: center;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  width: 40px;
+  height: 40px;
 }
 
 /* The game draws the None option as an empty frame with a cross in it. */

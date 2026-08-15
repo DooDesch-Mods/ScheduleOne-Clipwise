@@ -145,26 +145,30 @@ namespace Clipwise.UI
                     return FallbackWidth;
                 }
 
-                // STRETCHED INTO THE HOLDER, not copied off the card.
+                // THE HOLDER FOR PLACE, THE CARD FOR SIZE, and each of those was learned the hard way.
                 //
-                // Copying the card's anchors and size was the first attempt and it put the page beside the
-                // clipboard rather than on it: an anchoredPosition means nothing without the anchors it was
-                // measured against, and the card carries a layout of its own that this object does not have.
-                // Filling the same box the vanilla screen fills asks no questions about any of that.
+                // Copying the card's anchors AND its anchoredPosition put the page beside the clipboard: a
+                // position means nothing without the anchors it was measured against, and the card carries a
+                // layout of its own that this object does not have. Filling the holder instead put it in the
+                // right place and made it too big - the holder is the screen area, the card is the sheet inside
+                // it. So: centred in the holder, at the card's own size.
+                Vector2 size = card.rect.size;
+                if (size.x < 1f || size.y < 1f) size = new Vector2(FallbackWidth, FallbackHeight);
+
                 rect.SetParent(holder, false);
-                rect.anchorMin = Vector2.zero;
-                rect.anchorMax = Vector2.one;
+                rect.anchorMin = new Vector2(0.5f, 0.5f);
+                rect.anchorMax = new Vector2(0.5f, 0.5f);
                 rect.pivot = new Vector2(0.5f, 0.5f);
-                rect.offsetMin = Vector2.zero;
-                rect.offsetMax = Vector2.zero;
+                rect.anchoredPosition = Vector2.zero;
+                rect.sizeDelta = size;
                 rect.localScale = Vector3.one;
                 rect.localRotation = Quaternion.identity;
 
-                float width = holder.rect.width;
-                Core.Log.Msg("[Clipwise] surface fills '" + holder.name + "' at "
-                             + width.ToString("0") + "x" + holder.rect.height.ToString("0") + ".");
+                Core.Log.Msg("[Clipwise] surface " + size.x.ToString("0") + "x" + size.y.ToString("0")
+                             + " centred in '" + holder.name + "' ("
+                             + holder.rect.width.ToString("0") + "x" + holder.rect.height.ToString("0") + ").");
 
-                return width > 1f ? width : FallbackWidth;
+                return size.x;
             }
             catch (Exception e)
             {

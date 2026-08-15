@@ -27,7 +27,7 @@ let query = '';
   Filters are independent toggles, not one choice out of a list, because that is what they were before this
   screen was rebuilt: a player who wants their favourites of one tier picks both.
 */
-let f = { fav: false, disc: false, hidden: false, vanilla: false, bred: false, tags: [] };
+let f = { fav: false, hidden: false, vanilla: false, bred: false, tags: [] };
 
 /* One chip cycles through these. Index 0 keeps the order the mod supplied, which is the only order that means
    anything to the mod that supplied it. */
@@ -48,12 +48,13 @@ function load() {
   // Opened the way it was left. These three are the player's settings, kept on the mod's side.
   sort = view.sort || 0;
   f.fav = !!view.onlyFav;
-  f.disc = !!view.onlyDisc;
 }
 
 /** Push the three settings that outlive one open back to the mod. */
 function remember() {
-  s1.call('picker.state', sort + '|' + (f.fav ? 1 : 0) + '|' + (f.disc ? 1 : 0));
+  // The third field is the discovered filter, which this page no longer has - the mod still stores it, so
+  // it is sent back unchanged rather than silently turned off for anybody using the other picker.
+  s1.call('picker.state', sort + '|' + (f.fav ? 1 : 0) + '|' + (view.onlyDisc ? 1 : 0));
 }
 
 function visible() {
@@ -66,7 +67,6 @@ function visible() {
 
     if (!f.hidden && row.hidden) return false;
     if (f.fav && !row.fav) return false;
-    if (f.disc && row.disc === false) return false;
     if (f.vanilla && !row.vanilla) return false;
     if (f.bred && row.vanilla) return false;
 
@@ -110,74 +110,145 @@ function el(kind, cls, text) {
   return node;
 }
 
+/*
+  The filter bar.
+
+  FIXED CHIPS FOR THE SWITCHES, DROP-DOWNS FOR THE LISTS. A chip per effect ran off the edge of the card as
+  soon as a mod declared more than a handful of tags, which is exactly what a strain catalogue does. A list
+  that can be any length gets a drop-down; a switch that is on or off stays a chip.
+
+  There is no `Discovered` chip. Only discovered seeds reach this page at all, so it was a filter that never
+  removed anything.
+*/
+let open = null;   // which drop-down is showing, or null
+
+/** The tag groups a mod declared, as `prefix -> [tag]`, so `mod:effect/calming` becomes the "effect" list. */
+function groups() {
+  const out = new Map();
+
+  for (const tag of view.tags || []) {
+    const cut = tag.id.indexOf('/');
+    const colon = tag.id.indexOf(':');
+    if (cut < 0 || colon < 0 || cut < colon) continue;
+
+    const name = tag.id.substring(colon + 1, cut);
+    if (!out.has(name)) out.set(name, []);
+    out.get(name).push(tag);
+  }
+
+  return out;
+}
+
+function chip(box, label, on, act) {
+  const button = el('button', 'chip' + (on ? ' on' : ''), label);
+  button.addEventListener('click', () => { act(); render(); });
+  box.appendChild(button);
+  return button;
+}
+
 function renderChips() {
   const box = $('chips');
   box.replaceChildren();
 
-  const toggle = (label, on, act) => {
-    const button = el('button', 'chip' + (on ? ' on' : ''), label);
-    button.addEventListener('click', () => { act(); render(); });
-    box.appendChild(button);
-  };
-
-  toggle('Favourites', f.fav, () => { f.fav = !f.fav; remember(); });
-  toggle('Discovered', f.disc, () => { f.disc = !f.disc; remember(); });
+  chip(box, 'Favourites', f.fav, () => { f.fav = !f.fav; remember(); });
+  chip(box, 'Vanilla', f.vanilla, () => { f.vanilla = !f.vanilla; f.bred = false; });
+  chip(box, 'Bred', f.bred, () => { f.bred = !f.bred; f.vanilla = false; });
   if (view.hiddenCount || f.hidden) {
-    toggle('Hidden (' + (view.hiddenCount || 0) + ')', f.hidden, () => { f.hidden = !f.hidden; });
+    chip(box, 'Hidden (' + (view.hiddenCount || 0) + ')', f.hidden, () => { f.hidden = !f.hidden; });
   }
-  toggle('Vanilla', f.vanilla, () => { f.vanilla = !f.vanilla; f.bred = false; });
-  toggle('Bred', f.bred, () => { f.bred = !f.bred; f.vanilla = false; });
-  toggle(SORTS[sort] || SORTS[0], sort !== 0, () => { sort = (sort + 1) % SORTS.length; remember(); });
+  chip(box, SORTS[sort] || SORTS[0], sort !== 0, () => { sort = (sort + 1) % SORTS.length; remember(); });
 
-  for (const tag of view.tags || []) {
-    toggle(tag.label, f.tags.indexOf(tag.id) >= 0, () => {
+  // One drop-down per tag group, named after the group. Its chip counts what is ticked, so a filter that is on
+  // is visible without opening it.
+  for (const [name, tags] of groups()) {
+    const chosen = tags.filter((t) => f.tags.indexOf(t.id) >= 0).length;
+    const label = name.charAt(0).toUpperCase() + name.slice(1) + (chosen ? ' (' + chosen + ')' : '');
+    chip(box, label, chosen > 0 || open === name, () => { open = open === name ? null : name; });
+  }
+
+  // Only when something is actually on. A button that does nothing is worse than no button.
+  if (f.fav || f.vanilla || f.bred || f.tags.length || sort !== 0) {
+    chip(box, 'Clear', false, () => {
+      f.fav = false; f.vanilla = false; f.bred = false; f.tags = [];
+      sort = 0; open = null;
+      remember();
+    });
+  }
+
+  renderDropdown();
+}
+
+/** The open group's tick list, under the bar rather than over the grid - nothing to dismiss by accident. */
+function renderDropdown() {
+  const box = $('drop');
+  box.replaceChildren();
+
+  if (!open) { box.className = 'drop closed'; return; }
+  box.className = 'drop';
+
+  const tags = groups().get(open) || [];
+  for (const tag of tags) {
+    const ticked = f.tags.indexOf(tag.id) >= 0;
+    const line = el('button', 'tick' + (ticked ? ' on' : ''));
+    line.appendChild(el('span', 'tick-box', ticked ? 'x' : ''));
+    line.appendChild(el('span', 'tick-name', tag.label));
+    line.addEventListener('click', () => {
       const at = f.tags.indexOf(tag.id);
       if (at >= 0) f.tags.splice(at, 1); else f.tags.push(tag.id);
+      render();
     });
+    box.appendChild(line);
   }
 }
 
 /*
   The floating bubble, which is the whole reason a tile can afford to say nothing.
 
-  Two halves and both are needed: mouseenter/mouseleave for WHEN, and `rect()` for WHERE. A CSS-only tooltip
-  cannot work here - a `:hover` rule may repaint a box but never lay one out - and `rect()` reports the last
-  render, so a node the script has only just created reads as zeroes.
+  ONE NODE FOR THE WHOLE PAGE, not one per tile. Per-tile nodes left five bubbles on screen at once in a
+  tester's shot: a `mouseleave` that never arrives - the pointer left through a gap, the grid re-rendered under
+  it, the tile it belonged to was replaced - leaves a node with nobody to remove it. A single node cannot
+  accumulate, and anything that shows a new one takes the old one down first.
+
+  Two halves are still needed for WHEN and WHERE: mouseenter/mouseleave, and `rect()`, which reports the last
+  render - so a node the script has only just created reads as zeroes.
 */
+let tip = null;
+
+function hideTip() {
+  if (tip) { tip.remove(); tip = null; }
+}
+
+function showTip(anchor, row) {
+  hideTip();
+
+  const r = anchor.rect();
+  if (!r || !r.height) return;
+
+  tip = el('div', 'bubble');
+  tip.appendChild(el('div', 'bubble-name', row.name));
+  if (row.note) tip.appendChild(el('div', 'bubble-line', row.note));
+  if (row.tier) tip.appendChild(el('div', 'bubble-line', 'Tier ' + row.tier));
+  if (row.effects && row.effects.length) tip.appendChild(el('div', 'bubble-line', row.effects.join(', ')));
+
+  // Beside the tile, on whichever side has room. The card's own width is the only bound the page knows, so it
+  // is measured rather than assumed.
+  const card = document.body.rect();
+  const width = 168;
+  let left = r.x + r.width + 6;
+  if (card && left + width > card.width - 4) left = r.x - width - 6;
+  if (left < 4) left = 4;
+
+  tip.style.left = Math.round(left) + 'px';
+  tip.style.top = Math.round(r.y) + 'px';
+  tip.style.width = width + 'px';
+  document.body.appendChild(tip);
+}
+
 function bubble(anchor, row) {
-  let node = null;
-  const hide = () => { if (node) { node.remove(); node = null; } };
-
-  anchor.addEventListener('mouseenter', () => {
-    if (node) return;
-    const r = anchor.rect();
-    if (!r || !r.height) return;
-
-    node = el('div', 'bubble');
-    node.appendChild(el('div', 'bubble-name', row.name));
-    if (row.note) node.appendChild(el('div', 'bubble-line', row.note));
-    if (row.tier) node.appendChild(el('div', 'bubble-line', 'Tier ' + row.tier));
-    if (row.effects && row.effects.length) {
-      node.appendChild(el('div', 'bubble-line', row.effects.join(', ')));
-    }
-
-    // Beside the tile, and on whichever side has room. The card's own width is the only bound the page knows,
-    // so it is measured rather than assumed.
-    const card = document.body.rect();
-    const width = 168;
-    let left = r.x + r.width + 6;
-    if (card && left + width > card.width - 4) left = r.x - width - 6;
-    if (left < 4) left = 4;
-
-    node.style.left = Math.round(left) + 'px';
-    node.style.top = Math.round(r.y) + 'px';
-    node.style.width = width + 'px';
-    document.body.appendChild(node);
-  });
-
-  anchor.addEventListener('mouseleave', hide);
-  // A click re-renders the grid; a bubble left behind would hang over the new one.
-  anchor.addEventListener('click', hide);
+  anchor.addEventListener('mouseenter', () => showTip(anchor, row));
+  anchor.addEventListener('mouseleave', hideTip);
+  // A click re-renders the grid, and the tile this belonged to is gone with it.
+  anchor.addEventListener('click', hideTip);
 }
 
 /** One tile: the seed's picture, its star, and the bubble that carries the words. */
@@ -192,7 +263,8 @@ function tileNode(row) {
   // letters underneath are what the tile has left to identify itself with.
   shot.src = 's1://icon/' + row.id;
   pick.appendChild(shot);
-  pick.appendChild(el('span', 'shot-name', row.name));
+  // No name under the picture. The game's own tiles carry a vial and nothing else, and the bubble is where the
+  // words go - a nine-pixel name on a sixty-pixel tile was neither vanilla nor readable.
   pick.addEventListener('click', () => s1.call('picker.pick', row.id));
   tile.appendChild(pick);
 
@@ -300,6 +372,7 @@ function renderRows() {
 }
 
 function render() {
+  hideTip();
   $('title').textContent = view.title || 'Select';
 
   const rows = visible();
