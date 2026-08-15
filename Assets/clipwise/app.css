@@ -1,0 +1,112 @@
+/*
+  The clipboard, not a phone screen.
+
+  Every colour here is taken off the vanilla management clipboard rather than from Clipwise's old dark card:
+  a light grey sheet, near-black type, a grey label column, and a hand-drawn rule under the head. The point of
+  moving to a surface is that this file IS the design - matching vanilla stops being a uGUI rebuild.
+
+  Two engine rules shape the markup more than taste does. There is no `z-index` and no `cursor`, so depth is
+  document order; and symbol characters outside Latin-1 draw as empty boxes in the game's TMP atlases, so
+  nothing here uses a glyph for an icon. Where vanilla shows an X, this draws the word or a box.
+*/
+
+:root {
+  --sheet:     #C7CBD1;
+  --sheet-2:   #BFC4CB;
+  --ink:       #1B1D21;
+  --ink-2:     #5A5F68;
+  --hairline:  #9AA0A8;
+  --hot:       #B3261E;
+  --pick:      #AEB4BC;
+}
+
+body {
+  /* Required: the root is auto-height, so a percentage below has no basis without this. */
+  height: 100%;
+  font-family: game-ui;
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.card {
+  height: 100%;
+  padding: 14px 16px;
+  gap: 10px;
+  background: var(--sheet);
+}
+
+.head {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.head-title { font-size: 21px; font-weight: 700; }
+.head-count { font-size: 13px; color: var(--ink-2); }
+
+/* Vanilla draws a rule under the head rather than a border, and a border on the head would follow the card's
+   one border colour. A box of its own is both closer and cheaper. */
+.rule { height: 2px; background: var(--hairline); }
+
+.tabs { flex-direction: row; flex-wrap: wrap; gap: 6px; }
+
+.tab {
+  padding: 4px 10px;
+  border: 1px solid var(--hairline);
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  align-items: center;
+}
+
+.tab:hover { background: var(--sheet-2); }
+.tab.on { background: var(--ink); color: var(--sheet); border-color: var(--ink); }
+
+.find {
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--hairline);
+  background: #D8DBE0;
+  color: var(--ink);
+  align-items: center;
+}
+
+.find:focus { border-color: var(--ink); }
+
+/* min-height: 0 is what makes this scroll. Without it the automatic minimum in a column is the content's own
+   height, so the list grows the card instead. */
+.list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.row {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--hairline);
+  background: transparent;
+}
+
+.row:hover { background: var(--sheet-2); }
+.row:active { background: var(--pick); }
+
+.row-name { flex: 1; min-width: 0; }
+.row-note { color: var(--ink-2); font-size: 12px; }
+
+.section {
+  padding: 8px 8px 2px 8px;
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.empty { padding: 14px 8px; color: var(--ink-2); }
+
+.foot { flex-direction: row; align-items: center; justify-content: center; }
+.hint { color: var(--ink-2); font-size: 11px; }
