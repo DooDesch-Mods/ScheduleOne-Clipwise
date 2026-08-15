@@ -80,6 +80,8 @@ namespace Clipwise.UI
                 _surface.OnCall("picker.view", _ => ViewJson(_view))
                         .OnCall("picker.pick", Pick)
                         .OnCall("picker.fav", Fav)
+                        .OnCall("picker.hide", Hide)
+                        .OnCall("picker.state", State)
                         // The only way out that does not choose something. A surface has no back gesture - right
                         // click and Escape belong to the phone - so without this the picker can be opened and
                         // never left except by picking, which is not a choice the player asked to be given.
@@ -218,6 +220,34 @@ namespace Clipwise.UI
             return Prefs.UserPrefs.IsFavourite(itemId) ? "on" : "off";
         }
 
+        /// <summary>Hide or unhide one item, answering the state it ended in. Hidden entries drop out of the
+        /// list until the page asks for them back.</summary>
+        private static string Hide(string itemId)
+        {
+            if (string.IsNullOrEmpty(itemId)) return "error";
+            Prefs.UserPrefs.ToggleHidden(itemId);
+            return Prefs.UserPrefs.IsHidden(itemId) ? "on" : "off";
+        }
+
+        /// <summary>
+        /// The three view settings that outlive one open: <c>sort|favourites|discovered</c>.
+        ///
+        /// Kept on the C# side because they are the player's and not this page's - the same three were persisted
+        /// before this picker existed, and a player who set "sort by yield" last week should not have to set it
+        /// again because the screen was rebuilt in a different technology.
+        /// </summary>
+        private static string State(string arg)
+        {
+            string[] parts = (arg ?? string.Empty).Split('|');
+            if (parts.Length < 3) return "error";
+
+            if (int.TryParse(parts[0], out int sort)) Prefs.UserPrefs.SortMode = sort;
+            Prefs.UserPrefs.OnlyFavourites = parts[1] == "1";
+            Prefs.UserPrefs.OnlyDiscovered = parts[2] == "1";
+            Prefs.UserPrefs.Flush();
+            return "ok";
+        }
+
         // ---- the wire ---------------------------------------------------------------------------------------
 
         /// <summary>
@@ -237,6 +267,29 @@ namespace Clipwise.UI
             // here rather than in the page: a category key is namespaced (`clipwise:vanilla`), and the page
             // guessing at that shape printed the game's own seeds under the heading "VANILLA" twice.
             sb.Append(",\"added\":").Append(Quote(AddedLabel(view)));
+
+            // The three settings that outlive one open, so the page opens the way the player left it.
+            sb.Append(",\"sort\":").Append(Prefs.UserPrefs.SortMode)
+              .Append(",\"onlyFav\":").Append(Prefs.UserPrefs.OnlyFavourites ? "true" : "false")
+              .Append(",\"onlyDisc\":").Append(Prefs.UserPrefs.OnlyDiscovered ? "true" : "false")
+              .Append(",\"hiddenCount\":").Append(Prefs.UserPrefs.HiddenCount)
+              // The tooltip preference outlived the card it was written for: the bubble beside a tile is the
+              // same thing in the same place, so the same switch turns it off.
+              .Append(",\"tips\":").Append(Config.Preferences.Tooltips ? "true" : "false");
+
+            // One chip per tag a mod declared. `clipwise:` tags are the host's own bookkeeping - "is this modded",
+            // "is this discovered" - and each already has a chip or a section of its own.
+            sb.Append(",\"tags\":[");
+            bool firstTag = true;
+            foreach (string tag in view.Tags)
+            {
+                if (string.IsNullOrEmpty(tag) || tag.StartsWith("clipwise:", StringComparison.Ordinal)) continue;
+                if (!firstTag) sb.Append(',');
+                firstTag = false;
+                sb.Append("{\"id\":").Append(Quote(tag))
+                  .Append(",\"label\":").Append(Quote(Catalog.TagLabel(tag))).Append('}');
+            }
+            sb.Append(']');
 
             sb.Append(",\"tabs\":[");
             for (int i = 0; i < view.Categories.Count; i++)
@@ -280,11 +333,52 @@ namespace Clipwise.UI
                   // fetched on hover: a bubble that has to ask before it can appear arrives after the pointer
                   // has moved on.
                   .Append(",\"effects\":").Append(Effects(row))
+                  .Append(",\"hidden\":").Append(Prefs.UserPrefs.IsHidden(row.ItemId) ? "true" : "false")
+                  // Tri-state on purpose: an item that reports nothing about discovery is not the same as one
+                  // that reports "not discovered", and the filter must not swallow the first kind.
+                  .Append(",\"disc\":").Append(row.Facts?.Discovered == false ? "false" : "true")
+                  // What the sort modes read. Sent rather than asked for, because a sort must not cost a call
+                  // per comparison.
+                  .Append(",\"yield\":").Append((row.Facts?.BaseYield ?? 0).ToString(Culture))
+                  .Append(",\"growth\":").Append(Growth(row).ToString(Culture))
+                  .Append(",\"value\":").Append((row.Facts?.MarketValue ?? 0f).ToString("0.##", Culture))
+                  .Append(",\"tags\":").Append(Tags(row))
                   .Append('}');
             }
             sb.Append("]}");
 
             return sb.ToString();
+        }
+
+        /// <summary>Numbers on the wire are read by a JSON parser, not by a person, so they are written the way
+        /// that parser expects whatever the machine's locale has to say about decimal points.</summary>
+        private static readonly System.Globalization.CultureInfo Culture = System.Globalization.CultureInfo.InvariantCulture;
+
+        /// <summary>Growth time in hours, with "no plant" sorting last rather than first - an additive must not
+        /// lead a "fastest" list just because it has no growth time at all.</summary>
+        private static int Growth(Row row)
+        {
+            int hours = row?.Facts?.GrowthTimeHours ?? 0;
+            return hours > 0 ? hours : int.MaxValue;
+        }
+
+        /// <summary>The tags a mod put on this item, as a JSON array. The host's own bookkeeping tags are left
+        /// out for the same reason they get no chip.</summary>
+        private static string Tags(Row row)
+        {
+            if (row?.Tags == null || row.Tags.Count == 0) return "[]";
+
+            var sb = new StringBuilder(64);
+            sb.Append('[');
+            bool first = true;
+            foreach (string tag in row.Tags)
+            {
+                if (string.IsNullOrEmpty(tag) || tag.StartsWith("clipwise:", StringComparison.Ordinal)) continue;
+                if (!first) sb.Append(',');
+                first = false;
+                sb.Append(Quote(tag));
+            }
+            return sb.Append(']').ToString();
         }
 
         /// <summary>This item's effects as a JSON array, or <c>[]</c>.</summary>

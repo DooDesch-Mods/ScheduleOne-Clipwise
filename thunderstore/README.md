@@ -56,7 +56,10 @@ about anything.
 
 ## Install
 
-Needs MelonLoader 0.7.3+ and S1API. Drop `Clipwise.dll` into `Schedule I/Mods/`.
+Needs MelonLoader 0.7.3+, S1API and Sideload 1.31.0+. Drop `Clipwise.dll` into `Schedule I/Mods/`.
+
+Without Sideload the clipboard keeps the game's own item grid: Clipwise draws its picker as a Sideload page,
+so there is nothing for it to draw with.
 
 Settings live in `UserData/MelonPreferences.cfg` under `[Clipwise]`. Favourites and hidden entries live in
 `UserData/Clipwise/preferences.json`. Neither touches your save, and neither is shared in co-op.

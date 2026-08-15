@@ -95,16 +95,12 @@ namespace Clipwise
 
             // Runtime-registered definitions are gone and re-added per scene, and discovery state differs per save.
             ItemFacts.Invalidate();
-            ItemPicker.Close();
-            // The canvas the tooltip was parented to is gone with the old scene; rebuild it on the next hover.
-            Tooltip.Clear();
             SmoothScroll.Clear();
+            SurfacePicker.Close();
         }
 
         public override void OnUpdate()
         {
-            ItemPicker.Tick();
-            Tooltip.Tick();
             SmoothScroll.Tick();
 
 #if DEBUG

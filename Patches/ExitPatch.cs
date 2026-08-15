@@ -17,8 +17,8 @@ namespace Clipwise.Patches
         [HarmonyPrefix]
         private static bool Prefix()
         {
-            if (!ItemPicker.IsOpen) return true;
-            ItemPicker.Close();
+            if (!SurfacePicker.IsOpen) return true;
+            SurfacePicker.Close();
             return false;
         }
     }

@@ -64,12 +64,11 @@ namespace Clipwise.Patches
                 for (int i = 0; i < fields.Count; i++)
                     if (fields[i] != null) targets.Add(fields[i]);
 
-                // The Sideload surface first when it is switched on, and the uGUI card whenever it declines - a
-                // spike may never be the reason a clipboard stops working.
-                if (Preferences.SurfacePicker
-                    && SurfacePicker.TryOpen(canvasRoot, view, item => Apply(targets, item))) return false;
-
-                if (!ItemPicker.TryOpen(canvasRoot, view, item => Apply(targets, item))) return true;
+                // The surface, or nothing. There used to be a hand-built uGUI card here as well and the two were
+                // the same screen twice: every change cost double, and the card never did manage to look like
+                // the page it replaces. Without Sideload the mod stands down and the game's own grid runs,
+                // which is a clipboard that behaves exactly as it always did.
+                if (!SurfacePicker.TryOpen(canvasRoot, view, item => Apply(targets, item))) return true;
 
                 return false;   // the picker is up - skip the vanilla grid
             }
