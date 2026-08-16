@@ -139,10 +139,26 @@ function groups() {
   return out;
 }
 
-function chip(box, label, on, act) {
+/*
+  CHIP WIDTHS ARE ESTIMATED, NOT MEASURED, and that is the only option here.
+
+  There is no flex-wrap in this engine, so a row of chips either runs off the card or gets chunked in script -
+  and chunking needs to know how wide each chip will be BEFORE it is laid out. `el.rect()` reports the last
+  render, which is a frame too late. Seven per em plus the padding matches the card's font closely enough that
+  a row breaks one chip early at worst, and one chip early is invisible while one chip late is a word sliced in
+  half at the edge of the clipboard - which is what the tester was looking at.
+*/
+const CHIP_ROOM = 396;    // the card's 420 minus its side padding
+const CHIP_PAD = 22;      // the chip's own padding, both sides
+
+function chipWidth(label) {
+  return Math.round(String(label).length * 7) + CHIP_PAD;
+}
+
+function chip(row, label, on, act) {
   const button = el('button', 'chip' + (on ? ' on' : ''), label);
   button.addEventListener('click', () => { act(); render(); });
-  box.appendChild(button);
+  row.push({ node: button, width: chipWidth(label) });
   return button;
 }
 
@@ -150,29 +166,43 @@ function renderChips() {
   const box = $('chips');
   box.replaceChildren();
 
-  chip(box, 'Favourites', f.fav, () => { f.fav = !f.fav; remember(); });
-  chip(box, 'Vanilla', f.vanilla, () => { f.vanilla = !f.vanilla; f.bred = false; });
-  chip(box, 'Bred', f.bred, () => { f.bred = !f.bred; f.vanilla = false; });
+  const wanted = [];
+
+  chip(wanted, 'Favourites', f.fav, () => { f.fav = !f.fav; remember(); });
+  chip(wanted, 'Vanilla', f.vanilla, () => { f.vanilla = !f.vanilla; f.bred = false; });
+  chip(wanted, 'Bred', f.bred, () => { f.bred = !f.bred; f.vanilla = false; });
   if (view.hiddenCount || f.hidden) {
-    chip(box, 'Hidden (' + (view.hiddenCount || 0) + ')', f.hidden, () => { f.hidden = !f.hidden; });
+    chip(wanted, 'Hidden (' + (view.hiddenCount || 0) + ')', f.hidden, () => { f.hidden = !f.hidden; });
   }
-  chip(box, SORTS[sort] || SORTS[0], sort !== 0, () => { sort = (sort + 1) % SORTS.length; remember(); });
+  chip(wanted, SORTS[sort] || SORTS[0], sort !== 0, () => { sort = (sort + 1) % SORTS.length; remember(); });
 
   // One drop-down per tag group, named after the group. Its chip counts what is ticked, so a filter that is on
   // is visible without opening it.
   for (const [name, tags] of groups()) {
     const chosen = tags.filter((t) => f.tags.indexOf(t.id) >= 0).length;
     const label = name.charAt(0).toUpperCase() + name.slice(1) + (chosen ? ' (' + chosen + ')' : '');
-    chip(box, label, chosen > 0 || open === name, () => { open = open === name ? null : name; });
+    chip(wanted, label, chosen > 0 || open === name, () => { open = open === name ? null : name; });
   }
 
   // Only when something is actually on. A button that does nothing is worse than no button.
   if (f.fav || f.vanilla || f.bred || f.tags.length || sort !== 0) {
-    chip(box, 'Clear', false, () => {
+    chip(wanted, 'Clear', false, () => {
       f.fav = false; f.vanilla = false; f.bred = false; f.tags = [];
       sort = 0; open = null;
       remember();
     });
+  }
+
+  let row = null;
+  let used = 0;
+  for (const one of wanted) {
+    if (!row || used + one.width > CHIP_ROOM) {
+      row = el('div', 'chip-row');
+      box.appendChild(row);
+      used = 0;
+    }
+    row.appendChild(one.node);
+    used += one.width + 6;   // the row's gap
   }
 
   renderDropdown();

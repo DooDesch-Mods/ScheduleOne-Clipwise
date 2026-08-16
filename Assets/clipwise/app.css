@@ -81,14 +81,19 @@ body {
 
 /* The filter bar scrolls sideways rather than running off the card. There are nine chips at most and no
    wrapping in this engine, so the alternative is the last two hanging over the edge - which is what happened. */
+/* A COLUMN of rows, and the script decides where each row ends - there is no flex-wrap in this engine, and
+   a single scrolling row hid the last chip behind the edge of the clipboard with nothing to say it was there. */
 .chips {
+  gap: 4px;
+  margin: 10px 0 8px 0;
+}
+
+.chip-row {
   flex-direction: row;
   align-items: center;
   gap: 6px;
-  margin: 10px 0 8px 0;
   height: 26px;
   min-height: 26px;
-  overflow: auto;
 }
 
 .chip {
