@@ -146,7 +146,7 @@ function groups() {
   and chunking needs to know how wide each chip will be BEFORE it is laid out. `el.rect()` reports the last
   render, which is a frame too late. Seven per em plus the padding matches the card's font closely enough that
   a row breaks one chip early at worst, and one chip early is invisible while one chip late is a word sliced in
-  half at the edge of the clipboard - which is what the tester was looking at.
+  half at the edge of the clipboard.
 */
 const CHIP_ROOM = 396;    // the card's 420 minus its side padding
 const CHIP_PAD = 22;      // the chip's own padding, both sides
@@ -173,9 +173,8 @@ function renderChips() {
     ONE CHIP FOR THREE STATES, not two chips for two.
 
     Vanilla and Bred were never independent - turning one on turned the other off - so as two buttons they
-    spent a chip's worth of room saying something no player can hold both halves of. Asked for by the tester
-    in exactly those words: condense them to one button. It cycles all -> vanilla -> bred, and its label is
-    the state it is in, the way the sort chip already worked.
+    spent a chip's worth of room on a choice that only ever has one answer at a time. One chip, cycling
+    all -> vanilla -> bred, labelled with the state it is in - the way the sort chip already worked.
   */
   chip(wanted, f.vanilla ? 'Vanilla' : f.bred ? 'Bred' : 'All', f.vanilla || f.bred, () => {
     if (f.vanilla) { f.vanilla = false; f.bred = true; }
@@ -297,7 +296,7 @@ function bubble(anchor, row) {
 
   `mouseleave` is the right event and it does not always arrive: the pointer can leave a tile through the gap
   between two of them, or the grid can re-render under a stationary pointer. Either way the bubble outlives the
-  tile it belonged to, which is what a tester saw five of at once.
+  tile it belonged to.
 
   So the page as a whole also takes the pointer moving anywhere that is NOT a tile as "nothing is hovered". One
   listener, and it makes a missed mouseleave cost a pixel of movement rather than a stuck bubble.
