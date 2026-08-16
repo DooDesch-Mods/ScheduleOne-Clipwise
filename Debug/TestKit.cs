@@ -57,7 +57,7 @@ namespace Clipwise.Debugging
             string cmd = parts[0].ToLowerInvariant();
             if (cmd != "cwhelp" && cmd != "cwcats" && cmd != "cwdump" && cmd != "cwconflicts"
              && cmd != "cwnamecheck" && cmd != "cwauto" && cmd != "cwreload" && cmd != "cwopen"
-             && cmd != "cwtab" && cmd != "cwsearch" && cmd != "cwvanilla")
+             && cmd != "cwtab" && cmd != "cwsearch" && cmd != "cwvanilla" && cmd != "cwrect")
                 return false;
 
             // Both SubmitCommand overloads can fire for one submission (the string body calls the list body),
@@ -80,6 +80,7 @@ namespace Clipwise.Debugging
                     case "cwreload": Reload(); break;
                     case "cwopen": Open(); break;
                     case "cwvanilla": Vanilla(); break;
+                    case "cwrect": Rects(); break;
                     case "cwtab":
                     case "cwsearch": Filtering(); break;
                 }
@@ -316,6 +317,89 @@ namespace Clipwise.Debugging
             screen.Initialize("Seed (vanilla reference)", options, null, null);
             screen.Open();
             Say($"Clipwise: opened the vanilla selector with {options.Count} option(s).");
+        }
+
+        /// <summary>
+        /// Measure the clipboard, instead of sizing the picker from a screenshot.
+        ///
+        /// The surface has now been sized three different ways off pictures a tester sent, and every one of them
+        /// was a guess about WHICH object in the vanilla card is "the card". This prints the chain from the
+        /// option grid up to the canvas with each step's rect, which answers that question with numbers: the
+        /// clipboard's own screen, the paper inside its frame, and the grid inside the paper are three different
+        /// sizes, and the whole complaint is that we picked the wrong one of the three.
+        ///
+        /// It reads RectTransforms, so it needs no clipboard in the player's hands and no mouse - the sizes come
+        /// from anchors and offsets, which are set whether or not the object is on screen.
+        /// </summary>
+        private static void Rects()
+        {
+            ItemSelector screen = null;
+            var all = Resources.FindObjectsOfTypeAll<Il2CppScheduleOne.Management.ManagementInterface>();
+            for (int i = 0; all != null && i < all.Length; i++)
+            {
+                var mi = all[i];
+                if (mi == null || !mi.gameObject.scene.IsValid()) continue;
+                if (mi.ItemSelectorScreen != null) { screen = mi.ItemSelectorScreen; break; }
+            }
+            if (screen == null) { Complain("Clipwise: no ItemSelector in this scene."); return; }
+
+            RectTransform grid = null;
+            try { grid = screen.OptionContainer; } catch { }
+
+            var sb = new StringBuilder();
+            sb.AppendLine("Clipwise: the clipboard, from the option grid outward -");
+
+            Transform t = grid != null ? grid.transform : screen.transform;
+            int depth = 0;
+            while (t != null && depth < 12)
+            {
+                // GetComponent, not `as`: under IL2CPP a cast on an interop object handed back by .parent
+                // returns null even when the object really is a RectTransform, and the first version of this
+                // command printed "(no RectTransform)" for the entire clipboard because of it.
+                var rt = t.GetComponent<RectTransform>();
+                if (rt != null)
+                {
+                    Rect r = rt.rect;
+                    sb.Append("  ").Append(new string(' ', depth * 2))
+                      .Append(t.gameObject.name.PadRight(30 - System.Math.Min(28, depth * 2)))
+                      .Append(r.width.ToString("0")).Append(" x ").Append(r.height.ToString("0"))
+                      .Append("   scale ").Append(rt.localScale.x.ToString("0.###"))
+                      .Append(t.gameObject.activeSelf ? "" : "   (off)")
+                      .AppendLine();
+                }
+                else
+                {
+                    sb.Append("  ").Append(new string(' ', depth * 2)).Append(t.gameObject.name)
+                      .AppendLine("   (no RectTransform)");
+                }
+
+                t = t.parent;
+                depth++;
+            }
+
+            sb.AppendLine("  the picker is sized to the grid's PARENT today - the second line.");
+
+            // And what the card is made OF. The chain above says the screen, the mask and the canvas are all
+            // one size, which cannot be the whole story - the tester sees a wooden frame around a smaller sheet,
+            // so the sheet is a child with a margin, and that child is what a page should be cut to.
+            sb.AppendLine("  inside the ItemSelector -");
+            foreach (Transform child in screen.transform)
+            {
+                var crt = child.GetComponent<RectTransform>();
+                sb.Append("    ").Append(child.gameObject.name.PadRight(24));
+                if (crt != null)
+                    sb.Append(crt.rect.width.ToString("0")).Append(" x ").Append(crt.rect.height.ToString("0"))
+                      .Append("  at ").Append(crt.anchoredPosition.x.ToString("0")).Append(",")
+                      .Append(crt.anchoredPosition.y.ToString("0"));
+                else sb.Append("(no RectTransform)");
+
+                if (child.GetComponent<UnityEngine.UI.Image>() != null) sb.Append("   [Image]");
+                if (child.GetComponent<UnityEngine.UI.Mask>() != null) sb.Append("   [Mask]");
+                if (!child.gameObject.activeSelf) sb.Append("   (off)");
+                sb.AppendLine();
+            }
+
+            Say(sb.ToString());
         }
 
         /// <summary>
