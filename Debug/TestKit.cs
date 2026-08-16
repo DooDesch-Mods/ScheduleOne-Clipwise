@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using Clipwise.Content;
+using Il2CppScheduleOne.ObjectScripts;   // Pot - only this file needs it, so it is not a global using
 using Clipwise.Index;
 using Clipwise.Model;
 using Clipwise.Prefs;
@@ -25,6 +26,8 @@ namespace Clipwise.Debugging
     ///   cwauto        what the classifier alone makes of the current seed list
     ///   cwreload      re-read the override files and the user preferences
     ///   cwopen        open the picker on the seed list without a clipboard
+    ///   cwboard       open the real clipboard on the nearest pot, and close it again
+    ///   cwrect        the clipboard's own rects, so the picker is sized from numbers
     ///   cwtab, cwsearch   both print how to filter the page instead - see Filtering()
     ///
     /// The console needs <c>Settings.ConsoleEnabled</c> and the player being the host
@@ -57,7 +60,8 @@ namespace Clipwise.Debugging
             string cmd = parts[0].ToLowerInvariant();
             if (cmd != "cwhelp" && cmd != "cwcats" && cmd != "cwdump" && cmd != "cwconflicts"
              && cmd != "cwnamecheck" && cmd != "cwauto" && cmd != "cwreload" && cmd != "cwopen"
-             && cmd != "cwtab" && cmd != "cwsearch" && cmd != "cwvanilla" && cmd != "cwrect")
+             && cmd != "cwtab" && cmd != "cwsearch" && cmd != "cwvanilla" && cmd != "cwrect"
+             && cmd != "cwboard")
                 return false;
 
             // Both SubmitCommand overloads can fire for one submission (the string body calls the list body),
@@ -81,6 +85,7 @@ namespace Clipwise.Debugging
                     case "cwopen": Open(); break;
                     case "cwvanilla": Vanilla(); break;
                     case "cwrect": Rects(); break;
+                    case "cwboard": Board(); break;
                     case "cwtab":
                     case "cwsearch": Filtering(); break;
                 }
@@ -320,6 +325,76 @@ namespace Clipwise.Debugging
         }
 
         /// <summary>
+        /// Open the clipboard the way the player does, on the nearest pot - and close it on the second call.
+        ///
+        /// WHY. Everything this mod draws is drawn ON the clipboard, and the clipboard is reached by equipping an
+        /// item and clicking a pot. Neither is something the automation can do, so every judgement about how the
+        /// picker LOOKS has come from a tester's screenshot, and the seed card has now been sized three different
+        /// ways off three of them. This is the missing half of the loop: a screen that can be opened and
+        /// photographed here.
+        ///
+        /// The equippable is passed as null, and that is checked rather than hoped: vanilla only dereferences it
+        /// on the rename path and in the object and transit selectors (ManagementInterface.cs:195,
+        /// ObjectSelector.cs:90). The seed field touches none of them.
+        ///
+        /// A toggle, because there is no way to send Escape from here - the command that opens it has to be the
+        /// command that closes it.
+        /// </summary>
+        private static void Board()
+        {
+            var clipboard = Singleton<ManagementClipboard>.Instance;
+            if (clipboard == null) { Complain("Clipwise: no ManagementClipboard in this scene - load a save first."); return; }
+
+            if (clipboard.IsOpen)
+            {
+                clipboard.Close();
+                Say("Clipwise: closed the clipboard.");
+                return;
+            }
+
+            Pot pot = NearestPot();
+            if (pot == null) { Complain("Clipwise: no pot in this scene to open the clipboard on."); return; }
+
+            var selection = new Il2CppSystem.Collections.Generic.List<IConfigurable>();
+            var one = pot.TryCast<IConfigurable>();
+            if (one == null) { Complain("Clipwise: that pot does not present as IConfigurable."); return; }
+            selection.Add(one);
+
+            clipboard.Open(selection, null);
+            Say("Clipwise: clipboard open on '" + pot.gameObject.name + "'. Run cwboard again to close it.");
+        }
+
+        /// <summary>The pot closest to the player, or the first one found when there is no player.</summary>
+        private static Pot NearestPot()
+        {
+            Pot best = null;
+            float bestDistance = float.MaxValue;
+
+            Vector3 where = Vector3.zero;
+            try
+            {
+                var player = Il2CppScheduleOne.PlayerScripts.Player.Local;
+                if (player != null) where = player.transform.position;
+            }
+            catch { }
+
+            var pots = UnityEngine.Object.FindObjectsOfType<Pot>();
+            for (int i = 0; pots != null && i < pots.Length; i++)
+            {
+                var pot = pots[i];
+                if (pot == null) continue;
+
+                float d = Vector3.Distance(pot.transform.position, where);
+                if (d >= bestDistance) continue;
+
+                bestDistance = d;
+                best = pot;
+            }
+
+            return best;
+        }
+
+        /// <summary>
         /// Measure the clipboard, instead of sizing the picker from a screenshot.
         ///
         /// The surface has now been sized three different ways off pictures a tester sent, and every one of them
@@ -383,8 +458,11 @@ namespace Clipwise.Debugging
             // one size, which cannot be the whole story - the tester sees a wooden frame around a smaller sheet,
             // so the sheet is a child with a margin, and that child is what a page should be cut to.
             sb.AppendLine("  inside the ItemSelector -");
-            foreach (Transform child in screen.transform)
+            // Indexed, not foreach: iterating a Transform under IL2CPP yields Il2CppSystem.Object and the cast
+            // to Transform throws - the first version of this block died on that line.
+            for (int c = 0; c < screen.transform.childCount; c++)
             {
+                Transform child = screen.transform.GetChild(c);
                 var crt = child.GetComponent<RectTransform>();
                 sb.Append("    ").Append(child.gameObject.name.PadRight(24));
                 if (crt != null)

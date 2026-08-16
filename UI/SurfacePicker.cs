@@ -138,10 +138,26 @@ namespace Clipwise.UI
                     return FallbackWidth;
                 }
 
-                RectTransform holder = card.parent as RectTransform;
-                if (holder == null || !holder.gameObject.activeInHierarchy)
+                // GetComponent, NOT `as`. Under IL2CPP a cast on the interop object handed back by .parent
+                // returns null even when the object is a RectTransform - so this test failed every time, on
+                // every machine, and the picker was ALWAYS drawn at the fallback size. That is the whole of
+                // "the card extends past the clipboard": 540 wide over a 420-wide clipboard, reported three
+                // times and answered three times by changing which object gets measured, when the measuring
+                // never ran at all.
+                RectTransform holder = card.parent != null ? card.parent.GetComponent<RectTransform>() : null;
+                if (holder == null)
                 {
-                    Core.Log.Warning("[Clipwise] the ItemSelector's holder is not on screen - using the fallback size.");
+                    Core.Log.Warning("[Clipwise] the ItemSelector has no RectTransform parent - using the fallback size.");
+                    return FallbackWidth;
+                }
+
+                // NOT a check on the card: the game activates the selector screen in the very call this patch
+                // replaces, so at this moment it is off by definition. Its rect is set from anchors and offsets
+                // and reads correctly anyway. The HOLDER is the one that has to be on screen, because that is
+                // what the page is parented into.
+                if (!holder.gameObject.activeInHierarchy)
+                {
+                    Core.Log.Warning("[Clipwise] the clipboard is not on screen - using the fallback size.");
                     return FallbackWidth;
                 }
 
@@ -160,7 +176,8 @@ namespace Clipwise.UI
                 try
                 {
                     RectTransform grid = screen.OptionContainer;
-                    if (grid != null && grid.parent is RectTransform inner && inner != card) paper = inner;
+                    RectTransform inner = grid != null && grid.parent != null ? grid.parent.GetComponent<RectTransform>() : null;
+                    if (inner != null && inner != card) paper = inner;
                 }
                 catch { }
 
