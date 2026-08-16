@@ -168,6 +168,13 @@
       <HintPath>$(GameManagedPath)/Il2CppScheduleOne.Core.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <!-- Debug only, and on purpose: nothing this mod ships touches FishNet. The test kit's cwboard opens the
+         real clipboard on a Pot, and a Pot is a NetworkBehaviour - naming its base type is a compile-time
+         requirement of that one command. The Release build does not reference this at all. -->
+    <Reference Include="Il2CppFishNet.Runtime" Condition="'$(Configuration)' == 'Debug'">
+      <HintPath>$(GameManagedPath)/Il2CppFishNet.Runtime.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="S1API.Il2Cpp.MelonLoader">
       <HintPath>$(WorkspaceLibPath)/il2cpp/s1api/S1API.Il2Cpp.MelonLoader.dll</HintPath>
       <Private>false</Private>
