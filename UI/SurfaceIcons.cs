@@ -40,9 +40,9 @@ namespace Clipwise.UI
         /// bug than a grid whose last tiles are lettered, and the next open continues where this one stopped.</summary>
         private const int BudgetMs = 250;
 
-        internal static void Supply(string surfaceId, View view)
+        internal static void Supply(SurfaceHandle surface, View view)
         {
-            if (view == null || string.IsNullOrEmpty(surfaceId)) return;
+            if (view == null || surface == null) return;
 
             var watch = Stopwatch.StartNew();
             int made = 0, skipped = 0;
@@ -54,7 +54,15 @@ namespace Clipwise.UI
 
                 if (watch.ElapsedMilliseconds > BudgetMs) { skipped++; continue; }
 
-                Sprite icon = row.Facts?.Icon;
+                // THE LIVE DEFINITION FIRST, and the cached facts only as a fallback.
+                //
+                // `ItemFacts` captures `def.Icon` once and caches it by item id for the rest of the scene. A mod
+                // that dresses its items later - BreedToSeed tints a seed's icon per strain when the strain is
+                // materialized - swaps the sprite on the definition long after that snapshot was taken, and the
+                // cache never hears about it. The symptom is every vial in the grid drawn as the donor's: one
+                // picture, 684 strains, reported as exactly that.
+                Sprite icon = row.Item != null ? row.Item.Icon : null;
+                if (icon == null) icon = row.Facts?.Icon;
                 if (icon == null) { _failed.Add(row.ItemId); continue; }
 
                 // The first few, with the numbers that decide whether a tile can look like itself: a tester
@@ -69,7 +77,7 @@ namespace Clipwise.UI
                 byte[] png = Encode(icon);
                 if (png == null || png.Length == 0) { _failed.Add(row.ItemId); continue; }
 
-                Apps.SetImage(surfaceId, Prefix + row.ItemId, png);
+                surface.Image(Prefix + row.ItemId, png);
                 _done.Add(row.ItemId);
                 made++;
             }

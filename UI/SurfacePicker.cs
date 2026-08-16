@@ -91,7 +91,7 @@ namespace Clipwise.UI
 
                 // After the mount, because the page asks for its pictures as soon as it builds and the store has
                 // to have them by then. Cached across opens, so this is only slow the first time.
-                SurfaceIcons.Supply(SurfaceId, view);
+                SurfaceIcons.Supply(_surface, view);
 
                 return true;
             }
