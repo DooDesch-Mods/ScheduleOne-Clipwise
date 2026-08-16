@@ -95,7 +95,7 @@ namespace Clipwise.UI
         /// atlas page and is usually not readable, and both of those make a direct <c>GetPixels</c> throw. A blit
         /// copies the sprite's own rectangle out of whatever it sits in, and the copy is readable by construction.
         /// </summary>
-        private static byte[] Encode(Sprite sprite)
+        internal static byte[] Encode(Sprite sprite)
         {
             RenderTexture rt = null;
             RenderTexture previous = null;
@@ -125,9 +125,25 @@ namespace Clipwise.UI
                 copy.ReadPixels(new Rect(0f, 0f, w, h), 0, 0);
                 copy.Apply(false, false);
 
-                // The extension method, not ImageConversion.EncodeToPNG - the interop assembly puts it on the
-                // texture and has no static class of that name.
-                return copy.EncodeToPNG();
+                // Squared before it leaves, with the picture centred in transparent space.
+                //
+                // A seed vial's sprite is 73 by 225 - one to three - and the tile that draws it is a square. The
+                // page cannot fix that: a box in this engine is sized by CSS alone, there is no object-fit, and
+                // the mod is the only side that knows the sprite's proportions. So a 73x225 vial was drawn into
+                // 40x40 and came out as a dark smear with a dot under it, which is what "every seed looks the
+                // same" turned out to be - the pictures were right the whole time. Padding here fixes it for
+                // every item at once instead of teaching the page one aspect ratio per category.
+                Texture2D squared = Square(copy, w, h);
+                try
+                {
+                    // The extension method, not ImageConversion.EncodeToPNG - the interop assembly puts it on the
+                    // texture and has no static class of that name.
+                    return (squared ?? copy).EncodeToPNG();
+                }
+                finally
+                {
+                    if (squared != null) UnityEngine.Object.Destroy(squared);
+                }
             }
             catch (Exception e)
             {
@@ -139,6 +155,34 @@ namespace Clipwise.UI
                 RenderTexture.active = previous;
                 if (rt != null) RenderTexture.ReleaseTemporary(rt);
                 if (copy != null) UnityEngine.Object.Destroy(copy);
+            }
+        }
+
+        /// <summary>
+        /// The same picture on a transparent square, or null when it cannot be built - in which case the caller
+        /// ships the unpadded one, which is a squashed tile rather than an empty one.
+        /// </summary>
+        private static Texture2D Square(Texture2D source, int w, int h)
+        {
+            if (w == h) return null;
+
+            try
+            {
+                int side = Mathf.Max(w, h);
+                var square = new Texture2D(side, side, TextureFormat.RGBA32, false);
+
+                // A fresh Texture2D is not promised to be blank, and the padding is the whole point - so it is
+                // written explicitly. A zeroed Color32 is transparent black.
+                square.SetPixels32(new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<Color32>(side * side));
+                square.SetPixels32((side - w) / 2, (side - h) / 2, w, h, source.GetPixels32());
+                square.Apply(false, false);
+
+                return square;
+            }
+            catch (Exception e)
+            {
+                Core.WarnThrottled("icon-square", "Clipwise: an icon could not be padded to a square, its tile is squashed: " + e.Message);
+                return null;
             }
         }
     }
