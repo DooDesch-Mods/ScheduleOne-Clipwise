@@ -169,8 +169,19 @@ function renderChips() {
   const wanted = [];
 
   chip(wanted, 'Favourites', f.fav, () => { f.fav = !f.fav; remember(); });
-  chip(wanted, 'Vanilla', f.vanilla, () => { f.vanilla = !f.vanilla; f.bred = false; });
-  chip(wanted, 'Bred', f.bred, () => { f.bred = !f.bred; f.vanilla = false; });
+  /*
+    ONE CHIP FOR THREE STATES, not two chips for two.
+
+    Vanilla and Bred were never independent - turning one on turned the other off - so as two buttons they
+    spent a chip's worth of room saying something no player can hold both halves of. Asked for by the tester
+    in exactly those words: condense them to one button. It cycles all -> vanilla -> bred, and its label is
+    the state it is in, the way the sort chip already worked.
+  */
+  chip(wanted, f.vanilla ? 'Vanilla' : f.bred ? 'Bred' : 'All', f.vanilla || f.bred, () => {
+    if (f.vanilla) { f.vanilla = false; f.bred = true; }
+    else if (f.bred) { f.bred = false; }
+    else { f.vanilla = true; }
+  });
   if (view.hiddenCount || f.hidden) {
     chip(wanted, 'Hidden (' + (view.hiddenCount || 0) + ')', f.hidden, () => { f.hidden = !f.hidden; });
   }
