@@ -228,10 +228,15 @@ body {
 
 .shot:hover { background: #eef0f1; }
 
-/* The tile carries a picture and nothing else, the way the game's own does. The words are in the bubble. */
+/* The tile carries a picture and nothing else, the way the game's own does. The words are in the bubble.
+
+   `color` on an image TINTS it in this engine, and without one here the picture inherits the card's ink and
+   comes out dark. White is "leave it alone". The square is honest because the mod pads every icon to one
+   before it sends it - a seed vial's own sprite is one to three and would arrive squashed otherwise. */
 .shot-img {
   width: 40px;
   height: 40px;
+  color: #ffffff;
 }
 
 /* The game draws the None option as an empty frame with a cross in it. */

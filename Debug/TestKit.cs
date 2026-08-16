@@ -27,6 +27,7 @@ namespace Clipwise.Debugging
     ///   cwreload      re-read the override files and the user preferences
     ///   cwopen        open the picker on the seed list without a clipboard
     ///   cwboard       open the real clipboard on the nearest pot, and close it again
+    ///   cwpng         write the first few converted item icons to disk as PNGs
     ///   cwrect        the clipboard's own rects, so the picker is sized from numbers
     ///   cwtab, cwsearch   both print how to filter the page instead - see Filtering()
     ///
@@ -61,7 +62,7 @@ namespace Clipwise.Debugging
             if (cmd != "cwhelp" && cmd != "cwcats" && cmd != "cwdump" && cmd != "cwconflicts"
              && cmd != "cwnamecheck" && cmd != "cwauto" && cmd != "cwreload" && cmd != "cwopen"
              && cmd != "cwtab" && cmd != "cwsearch" && cmd != "cwvanilla" && cmd != "cwrect"
-             && cmd != "cwboard")
+             && cmd != "cwboard" && cmd != "cwpng")
                 return false;
 
             // Both SubmitCommand overloads can fire for one submission (the string body calls the list body),
@@ -86,6 +87,7 @@ namespace Clipwise.Debugging
                     case "cwvanilla": Vanilla(); break;
                     case "cwrect": Rects(); break;
                     case "cwboard": Board(); break;
+                    case "cwpng": DumpIcons(); break;
                     case "cwtab":
                     case "cwsearch": Filtering(); break;
                 }
@@ -362,6 +364,43 @@ namespace Clipwise.Debugging
 
             clipboard.Open(selection, null);
             Say("Clipwise: clipboard open on '" + pot.gameObject.name + "'. Run cwboard again to close it.");
+        }
+
+        /// <summary>
+        /// Write the first few converted icons to disk, exactly as the page receives them.
+        ///
+        /// The tiles draw their vials almost black (#122) and there are two candidates that look identical on
+        /// screen: the conversion produces wrong bytes, or the bytes are right and the page draws them badly.
+        /// A file on disk tells them apart in one look, and nothing else does - a screenshot of a tile is a
+        /// picture of the second stage only.
+        /// </summary>
+        private static void DumpIcons()
+        {
+            var seeds = Seeds();
+            if (seeds == null) { Complain("Clipwise: no ManagementUtilities in this scene - load a save first."); return; }
+
+            string dir = System.IO.Path.Combine(MelonLoader.Utils.MelonEnvironment.UserDataDirectory, "Clipwise");
+            System.IO.Directory.CreateDirectory(dir);
+
+            int written = 0;
+            for (int i = 0; i < seeds.Count && written < 6; i++)
+            {
+                ItemDefinition def = seeds[i];
+                if (def == null) continue;
+
+                Sprite icon = def.Icon;
+                if (icon == null) { Say("  " + def.ID + ": no icon on the definition"); continue; }
+
+                byte[] png = SurfaceIcons.Encode(icon);
+                if (png == null || png.Length == 0) { Say("  " + def.ID + ": conversion returned nothing"); continue; }
+
+                string file = System.IO.Path.Combine(dir, "icon-" + def.ID + ".png");
+                System.IO.File.WriteAllBytes(file, png);
+                Say("  " + def.ID + ": " + png.Length + " bytes -> " + file);
+                written++;
+            }
+
+            if (written == 0) Complain("Clipwise: nothing was written.");
         }
 
         /// <summary>The pot closest to the player, or the first one found when there is no player.</summary>
