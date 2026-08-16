@@ -260,6 +260,9 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           generate_release_notes: true
+          # A prerelease until somebody sets PUBLIC_RELEASE, because that is what these tags are: builds for
+          # the people testing, not a version anybody outside has been told about.
+          prerelease: ${{ vars.PUBLIC_RELEASE != 'true' }}
           files: release/Clipwise.dll
           body: |
             ## Changes in ${{ needs.build.outputs.version }}
@@ -272,7 +275,9 @@ jobs:
       # built here, where the version and the changelog section are already known. Skipped when the secret is
       # not set, so a fork or a repo without the feed just builds and releases.
       - name: Announce the release in Discord
-        if: ${{ !cancelled() }}
+        # Announcing is publishing: it tells a server that a version exists and invites people to install it.
+        # Same guard as the package uploads, for the same reason.
+        if: ${{ !cancelled() && !github.event.repository.private && vars.PUBLIC_RELEASE == 'true' }}
         env:
           WEBHOOK: ${{ secrets.DISCORD_RELEASE_WEBHOOK }}
           VERSION: ${{ needs.build.outputs.version }}
@@ -329,9 +334,16 @@ jobs:
           curl -sS -f -X POST -H "Content-Type: application/json" -d @payload.json "$WEBHOOK" \
             && echo "announced $NAME $VERSION"
 
+  # NOTHING LEAVES THIS REPOSITORY UNTIL SOMEBODY SAYS SO. Clipwise has never been released and is tagged for
+  # local test builds, so a tag must build and hang the zip on a release and do nothing else. A Thunderstore
+  # version cannot be taken back - it can be deactivated, but the number is spent.
+  #
+  # `!private` is the half that cannot be misconfigured, and it does not help here because this repository is
+  # public. `PUBLIC_RELEASE` is therefore the one that holds, and it is unset on purpose.
   thunderstore:
     needs: build
     runs-on: ubuntu-latest
+    if: ${{ !github.event.repository.private && vars.PUBLIC_RELEASE == 'true' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -365,8 +377,9 @@ jobs:
   nexus:
     needs: build
     runs-on: ubuntu-latest
-    # Skipped until the Nexus mod page exists and both IDs are set as repo/org variables.
-    if: ${{ vars.NEXUS_FILE_GROUP_ID != '' && vars.NEXUS_MOD_ID != '' }}
+    # Same guard as thunderstore, on top of the ids. The ids being empty is what keeps this quiet today, and
+    # that is an accident of configuration rather than a decision.
+    if: ${{ !github.event.repository.private && vars.PUBLIC_RELEASE == 'true' && vars.NEXUS_FILE_GROUP_ID != '' && vars.NEXUS_MOD_ID != '' }}
     steps:
       - name: Download Nexus ZIP
         uses: actions/download-artifact@v4
