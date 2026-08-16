@@ -9,32 +9,25 @@ using UnityEngine;
 namespace Clipwise.UI
 {
     /// <summary>
-    /// The picker as a Sideload surface instead of hand-built uGUI.
+    /// The seed picker: one page, drawn by the same engine the in-game phone runs.
     ///
-    /// WHY. <see cref="ItemPicker"/> is 730 lines that build a scrim, a scroll rect, an input field, a chip bar,
-    /// tab buttons and a row pool by hand, plus 218 more for a tooltip. A surface is the same page engine the
-    /// phone runs, mounted into a RectTransform this mod already resolves, so all of that becomes markup and a
-    /// stylesheet - which is also the only sane way to answer "make it look exactly like the vanilla clipboard".
+    /// WHY IT IS NOT uGUI. The screen it replaces was 730 lines building a scrim, a scroll rect, an input field, a
+    /// chip bar, tab buttons and a row pool by hand, plus 218 more for a tooltip. As a surface all of that is
+    /// markup and a stylesheet - which is also the only sane way to answer "make it look exactly like the vanilla
+    /// clipboard", because the answer keeps changing and a stylesheet can follow it.
     ///
-    /// THIS IS THE SPIKE, not the replacement. It is off unless <c>SurfacePicker</c> is switched on in
-    /// preferences, and the uGUI picker stays the default until this one does everything it does: tag chips,
-    /// favourites, sort modes, hidden items and the hover tooltip are all still only over there.
-    ///
-    /// What it proves: the shim compiles in, the bundle resolves, a surface mounts on the clipboard's own canvas
-    /// and paints, and picking through the page writes back through the same handler the uGUI picker uses.
-    ///
-    /// Mounting is deliberately onto the SAME canvas <see cref="Patches.ItemFieldUIPatch"/> already resolves - the
-    /// game's <c>ManagementWorldspaceCanvas</c>, which is screen-space-overlay and carries a GraphicRaycaster.
-    /// Both matter: a surface on a camera-lit canvas comes out tone-mapped, and without a raycaster nothing in
-    /// the page can be clicked.
+    /// Mounted onto the SAME canvas <see cref="Patches.ItemFieldUIPatch"/> already resolves - the game's
+    /// <c>ManagementWorldspaceCanvas</c>, which is screen-space-overlay and carries a GraphicRaycaster. Both
+    /// matter: a surface on a camera-lit canvas comes out tone-mapped, and without a raycaster nothing in the page
+    /// can be clicked.
     /// </summary>
     internal static class SurfacePicker
     {
         internal const string SurfaceId = "clipwise";
         private const string BundlePrefix = "Clipwise.Assets.clipwise";
 
-        /// <summary>Only for a clipboard whose own card cannot be measured - see <see cref="Fit"/>. Matches the
-        /// uGUI picker's card, which is the size this page was drawn against before it had anything to copy.</summary>
+        /// <summary>Only for a clipboard whose own card cannot be measured - see <see cref="Fit"/>. The size this
+        /// page was drawn against before there was a real card to copy.</summary>
         private const float FallbackWidth = 540f;
         private const float FallbackHeight = 620f;
 
@@ -222,8 +215,8 @@ namespace Clipwise.UI
         }
 
         /// <summary>
-        /// One item id in, the same write-back the uGUI picker performs. The empty id is the None/Any line and is a
-        /// real answer rather than a miss, so it is matched before the lookup.
+        /// One item id in, the same write-back the game's own grid performs. The empty id is the None/Any line
+        /// and is a real answer rather than a miss, so it is matched before the lookup.
         /// </summary>
         private static string Pick(string itemId)
         {
