@@ -251,6 +251,23 @@ function bubble(anchor, row) {
   anchor.addEventListener('click', hideTip);
 }
 
+/*
+  The backstop.
+
+  `mouseleave` is the right event and it does not always arrive: the pointer can leave a tile through the gap
+  between two of them, or the grid can re-render under a stationary pointer. Either way the bubble outlives the
+  tile it belonged to, which is what a tester saw five of at once.
+
+  So the page as a whole also takes the pointer moving anywhere that is NOT a tile as "nothing is hovered". One
+  listener, and it makes a missed mouseleave cost a pixel of movement rather than a stuck bubble.
+*/
+document.body.addEventListener('mousemove', (e) => {
+  if (!tip) return;
+  const over = e && e.target ? e.target : null;
+  if (over && over.className && String(over.className).indexOf('shot') >= 0) return;
+  hideTip();
+});
+
 /** One tile: the seed's picture, its star, and the bubble that carries the words. */
 function tileNode(row) {
   const tile = el('div', 'tile' + (row.sel ? ' sel' : ''));

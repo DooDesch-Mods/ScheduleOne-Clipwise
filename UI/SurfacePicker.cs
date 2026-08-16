@@ -145,14 +145,26 @@ namespace Clipwise.UI
                     return FallbackWidth;
                 }
 
-                // THE HOLDER FOR PLACE, THE CARD FOR SIZE, and each of those was learned the hard way.
+                // THE HOLDER FOR PLACE, THE PAPER FOR SIZE, and every part of that was learned from a
+                // screenshot.
                 //
                 // Copying the card's anchors AND its anchoredPosition put the page beside the clipboard: a
                 // position means nothing without the anchors it was measured against, and the card carries a
                 // layout of its own that this object does not have. Filling the holder instead put it in the
                 // right place and made it too big - the holder is the screen area, the card is the sheet inside
                 // it. So: centred in the holder, at the card's own size.
-                Vector2 size = card.rect.size;
+                // The screen's own rect is the whole clipboard, edge to edge - taking it covered the wooden
+                // frame that vanilla leaves showing. The paper inside it is what the player calls the card, and
+                // the option grid is a child of that paper, so its PARENT is the thing to measure.
+                RectTransform paper = card;
+                try
+                {
+                    RectTransform grid = screen.OptionContainer;
+                    if (grid != null && grid.parent is RectTransform inner && inner != card) paper = inner;
+                }
+                catch { }
+
+                Vector2 size = paper.rect.size;
                 if (size.x < 1f || size.y < 1f) size = new Vector2(FallbackWidth, FallbackHeight);
 
                 rect.SetParent(holder, false);
@@ -165,7 +177,7 @@ namespace Clipwise.UI
                 rect.localRotation = Quaternion.identity;
 
                 Core.Log.Msg("[Clipwise] surface " + size.x.ToString("0") + "x" + size.y.ToString("0")
-                             + " centred in '" + holder.name + "' ("
+                             + " from '" + paper.name + "', centred in '" + holder.name + "' ("
                              + holder.rect.width.ToString("0") + "x" + holder.rect.height.ToString("0") + ").");
 
                 return size.x;

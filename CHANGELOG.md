@@ -29,6 +29,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - The keyboard reaches the game again while the picker is open. The search box held the caret whenever nothing else did, and a caret in a field is what stops the game seeing keys - including the Escape that closes the picker. Click the box to type.
 - The picker fills the box the game's own selection screen fills. It was a fixed 540x620 in the middle of the screen, and then a copy of the card's position - which put it beside the clipboard, because a position means nothing without the anchors it was measured against.
+- The picker sits inside the clipboard's wooden frame. It measured the whole selection screen, which is the board edge to edge; the paper inside it is what the player calls the card.
+- A hover bubble also goes away when the pointer moves anywhere that is not a tile. `mouseleave` does not always arrive - through the gap between two tiles, or when the grid redraws under a still pointer - and the bubble outlived its tile.
 - The filter bar fits the card. A chip per effect ran off the edge as soon as a mod declared more than a handful; a tag group is a drop-down with tick boxes now, and there is a Clear button when anything is on.
 - One hover bubble for the page instead of one per tile. A mouseleave that never arrived left the old ones on screen - five at once in a tester's shot.
 - A tile carries its picture and nothing else, the way the game's own does. The name is in the bubble.

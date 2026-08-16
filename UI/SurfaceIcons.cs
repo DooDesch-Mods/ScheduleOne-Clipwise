@@ -57,6 +57,15 @@ namespace Clipwise.UI
                 Sprite icon = row.Facts?.Icon;
                 if (icon == null) { _failed.Add(row.ItemId); continue; }
 
+                // The first few, with the numbers that decide whether a tile can look like itself: a tester
+                // reported every vial in the grid drawn identically, and the two candidates - every item
+                // handing back the same sprite, versus this conversion cropping the same region out of an
+                // atlas for all of them - are told apart by exactly these values.
+                if (made < 4)
+                    Core.LogDebug("[Clipwise] icon " + row.ItemId + ": sprite '" + icon.name
+                                  + "' on '" + (icon.texture != null ? icon.texture.name : "?")
+                                  + "' rect " + icon.textureRect + ".");
+
                 byte[] png = Encode(icon);
                 if (png == null || png.Length == 0) { _failed.Add(row.ItemId); continue; }
 
