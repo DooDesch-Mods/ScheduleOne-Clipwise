@@ -168,7 +168,7 @@ function renderChips() {
 
   const wanted = [];
 
-  chip(wanted, 'Favourites', f.fav, () => { f.fav = !f.fav; remember(); });
+  chip(wanted, 'Favorites', f.fav, () => { f.fav = !f.fav; remember(); });
   /*
     ONE CHIP FOR THREE STATES, not two chips for two.
 
