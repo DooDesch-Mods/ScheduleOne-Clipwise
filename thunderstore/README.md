@@ -7,7 +7,7 @@ of look-alike icons. No scrolling, no search, no grouping, and the name only sho
 cursor happens to be on. Install a mod that adds thirty strains and that grid runs off the bottom of your
 screen.
 
-Clipwise replaces it with tabs, a search box, filters, favourites, and a tooltip that actually tells you what
+Clipwise replaces it with tabs, a search box, filters, favorites, and a tooltip that actually tells you what
 a seed grows.
 
 ## What you get
@@ -15,7 +15,7 @@ a seed grows.
 - **Tabs instead of a wall:** vanilla seeds in one tab, each content mod's in its own.
 - **Search as you type:** matches names, categories, effects and filter labels.
 - **Filter chips:** narrow by effect, tier, drug type, or flip on "only discovered".
-- **Favourites:** star the five you actually plant; they sit at the top of every tab.
+- **Favorites:** star the five you actually plant; they sit at the top of every tab.
 - **Sort how you like:** default order, A-Z, yield, growth time or market value.
 - **Hide the rest:** cross out what you never plant. It comes back whenever you want it.
 - **Tooltips:** effects, yield, growth time, market value, buy price, discovered or not.
@@ -61,5 +61,5 @@ Needs MelonLoader 0.7.3+, S1API and Sideload 1.31.0+. Drop `Clipwise.dll` into `
 Without Sideload the clipboard keeps the game's own item grid: Clipwise draws its picker as a Sideload page,
 so there is nothing for it to draw with.
 
-Settings live in `UserData/MelonPreferences.cfg` under `[Clipwise]`. Favourites and hidden entries live in
+Settings live in `UserData/MelonPreferences.cfg` under `[Clipwise]`. Favorites and hidden entries live in
 `UserData/Clipwise/preferences.json`. Neither touches your save, and neither is shared in co-op.
