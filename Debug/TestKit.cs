@@ -1,4 +1,4 @@
-#if DEBUG
+﻿#if DEBUG
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -62,7 +62,7 @@ namespace Clipwise.Debugging
             if (cmd != "cwhelp" && cmd != "cwcats" && cmd != "cwdump" && cmd != "cwconflicts"
              && cmd != "cwnamecheck" && cmd != "cwauto" && cmd != "cwreload" && cmd != "cwopen"
              && cmd != "cwtab" && cmd != "cwsearch" && cmd != "cwvanilla" && cmd != "cwrect"
-             && cmd != "cwboard" && cmd != "cwpng")
+             && cmd != "cwboard" && cmd != "cwpng" && cmd != "cwfield")
                 return false;
 
             // Both SubmitCommand overloads can fire for one submission (the string body calls the list body),
@@ -84,6 +84,7 @@ namespace Clipwise.Debugging
                     case "cwauto": Auto(); break;
                     case "cwreload": Reload(); break;
                     case "cwopen": Open(); break;
+                    case "cwfield": Field(); break;
                     case "cwvanilla": Vanilla(); break;
                     case "cwrect": Rects(); break;
                     case "cwboard": Board(); break;
@@ -108,6 +109,11 @@ namespace Clipwise.Debugging
               + "  cwauto       what the classifier alone makes of the current seed list\n"
               + "  cwreload     re-read override files and user preferences\n"
               + "  cwopen       open the picker on the seed list without a clipboard\n"
+              + "  cwboard      open the real clipboard on the nearest pot, and close it again\n"
+              + "  cwfield      report what the pot's seed field holds, and press it for real\n"
+              + "  cwvanilla    the game's own option grid, measured\n"
+              + "  cwrect       the rects the picker is placed against\n"
+              + "  cwpng        write every picker icon out as a PNG\n"
               + "  cwtab [key]  switch the open picker's tab (no arg = All)\n"
               + "  cwsearch [q] set the open picker's search text");
         }
@@ -267,6 +273,60 @@ namespace Clipwise.Debugging
             UserPrefs.Load();
             ItemFacts.Invalidate();
             Say($"Clipwise: reloaded. {Catalog.ClaimCount} claim(s) from {OverrideLoader.LoadedSources.Count} override file(s).");
+        }
+
+        /// <summary>
+        /// Open the picker the way a PLAYER does - through the clipboard's own field - so the write-back runs.
+        ///
+        /// WHY <c>cwopen</c> IS NOT ENOUGH, and this cost a round trip to the tester to find out: it builds a
+        /// view by hand and hands the picker a callback that <b>logs</b>. So it proves the page draws and that a
+        /// click reaches a tile, and it proves nothing at all about the choice reaching a pot - which is the half
+        /// that was reported broken. A harness that exercises a stand-in instead of the real path answers the
+        /// wrong question confidently.
+        ///
+        /// This invokes the field's own button, so <see cref="Patches.ItemFieldUIPatch"/> runs exactly as it does
+        /// for a mouse, and the picker comes up with the real <c>Apply</c> behind it. Then
+        /// <c>sideload_click .shot</c> picks a tile through the real raycast, and <c>cwfield</c> again reports
+        /// what the field holds now.
+        /// </summary>
+        private static void Field()
+        {
+            var fields = UnityEngine.Object.FindObjectsOfType<ItemFieldUI>(true);
+            if (fields == null || fields.Length == 0)
+            {
+                Complain("Clipwise: no ItemFieldUI in the scene - open the clipboard on a pot first (cwboard).");
+                return;
+            }
+
+            ItemFieldUI seed = null;
+            for (int i = 0; i < fields.Length; i++)
+            {
+                var f = fields[i];
+                if (f == null || !f.gameObject.activeInHierarchy) continue;
+
+                string label = f.FieldLabel != null ? f.FieldLabel.text : null;
+                if (label != null && label.IndexOf("seed", StringComparison.OrdinalIgnoreCase) >= 0) { seed = f; break; }
+                if (seed == null) seed = f;
+            }
+
+            if (seed == null) { Complain("Clipwise: no active item field on screen."); return; }
+
+            string held = "(none)";
+            try
+            {
+                var one = seed.Fields != null && seed.Fields.Count > 0 ? seed.Fields[0] : null;
+                if (one != null && one.SelectedItem != null) held = one.SelectedItem.ID;
+            }
+            catch (Exception e) { held = "unreadable: " + e.Message; }
+
+            Say("Clipwise: field '" + (seed.FieldLabel != null ? seed.FieldLabel.text : "?") + "' holds " + held);
+
+            // `Clicked` IS the patched method, so this enters the mod exactly where a mouse does. Pressing the
+            // button instead would work too and would depend on the field's own wiring; this depends on the one
+            // thing the patch is pinned to.
+            seed.Clicked();
+            Say("Clipwise: pressed the field - the picker should be up on the REAL path now. "
+              + "sideload_click .shot to choose, then cwfield again to see what it holds.");
         }
 
         private static void Open()

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Text;
 using Clipwise.Index;
@@ -75,6 +75,14 @@ namespace Clipwise.UI
                         .OnCall("picker.fav", Fav)
                         .OnCall("picker.hide", Hide)
                         .OnCall("picker.state", State)
+                        // See the listener in app.js: this fires only when a click reached the page and was taken
+                        // by something that is not a tile. No line at all after a click on a seed means the
+                        // pointer never got here, which is the other half of the same question.
+                        .OnCall("picker.stray", on =>
+                        {
+                            Core.Log.Msg("[Clipwise] a click in the list was taken by '" + on + "', not by a tile.");
+                            return "ok";
+                        })
                         // The only way out that does not choose something. A surface has no back gesture - right
                         // click and Escape belong to the phone - so without this the picker can be opened and
                         // never left except by picking, which is not a choice the player asked to be given.
@@ -228,6 +236,11 @@ namespace Clipwise.UI
         private static string Pick(string itemId)
         {
             if (_view == null || _onPick == null) return "error";
+
+            // What arrived, before anything is decided about it. The picker writes back through a callback the
+            // caller owns, so from the outside a pick that chose nothing and a pick that never happened look the
+            // same - and "the click does nothing" is the report this mod gets most often.
+            Core.LogDebug("[Clipwise] pick: '" + (itemId ?? "(null)") + "'");
 
             // The None/Any line is not in Rows and its id is empty, so it has to be matched before the lookup or
             // a pot set to "Any" could never be set back to it. Vanilla keeps the same option as the X tile.
