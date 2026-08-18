@@ -254,8 +254,38 @@ function renderDropdown() {
 */
 let tip = null;
 
+/*
+  THE FADE, AND WHY IT IS BUILT LIKE THIS.
+
+  A bubble that lingers on purpose is a bubble that can be left behind on purpose - that was the original
+  stuck-bubble bug, and a fade-out reintroduces exactly the state it came from: a node outliving the tile it
+  belonged to. So the lifetime is bounded from both ends.
+
+  At most ONE dying bubble exists, and anything that shows a new one kills it on the spot rather than waiting
+  for its timer. That is the whole safety property: the only way a bubble stays on screen is if the timer never
+  fires AND the pointer never moves again, and the body-level `mousemove` backstop already covers the second.
+
+  The failure direction is right too - a mistake here loses a bubble, it does not strand one.
+*/
+let dying = null;
+let reaper = 0;
+
+function reap() {
+  if (reaper) { clearTimeout(reaper); reaper = 0; }
+  if (dying) { dying.remove(); dying = null; }
+}
+
 function hideTip() {
-  if (tip) { tip.remove(); tip = null; }
+  // Whatever was already on its way out goes now. Two fading bubbles is the state this is written to prevent.
+  reap();
+
+  if (!tip) return;
+
+  // Dropping the class starts the transition back to zero; the node is removed once it has finished.
+  tip.className = 'bubble';
+  dying = tip;
+  tip = null;
+  reaper = setTimeout(reap, 160);
 }
 
 function showTip(anchor, row) {
@@ -282,6 +312,15 @@ function showTip(anchor, row) {
   tip.style.top = Math.round(r.y) + 'px';
   tip.style.width = width + 'px';
   document.body.appendChild(tip);
+
+  // Faded up a frame later, so the transition has a zero to start from - setting the class in the same pass
+  // as the append gives the engine one style to apply and no change to animate.
+  //
+  // The node is captured rather than read back off `tip`: by the time this runs the pointer may already be on
+  // the next tile, and turning on whatever `tip` happens to be then would light a bubble the script has
+  // already replaced.
+  const mine = tip;
+  setTimeout(() => { if (mine === tip) mine.className = 'bubble on'; }, 0);
 }
 
 function bubble(anchor, row) {
