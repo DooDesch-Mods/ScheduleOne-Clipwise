@@ -101,7 +101,9 @@ body {
   /* Never squeezed to fit the bar: a chip narrower than its word is a chip with half a word in it. */
   flex-shrink: 0;
   padding: 0 10px;
-  border: 1px solid #a9adb4;
+  /* The same slate the selected tile and an active chip already use, so the bar reads as one family of
+     controls rather than a light row above a dark one. */
+  border: 1px solid #3a3d42;
   border-radius: 12px;
   background: #e9eaec;
   color: #4a4f57;
@@ -210,7 +212,9 @@ body {
   flex: 1;
   height: 62px;
   border: 1px solid #c6c9cd;
-  border-radius: 4px;
+  /* The game's own seed tiles are softer than this was. 4px read as a square with the corners filed off;
+     the tile it sits beside is visibly rounded. */
+  border-radius: 8px;
   background: #e4e6e8;
 }
 
@@ -223,12 +227,20 @@ body {
 .tile.sel { border: 2px solid #3a3d42; }
 
 /* The whole tile is the target. The star sits on top of it rather than inside, so starring and choosing
-   stay two separate clicks. */
+   stay two separate clicks.
+
+   CENTRED ON BOTH AXES, and it has to be said rather than left to the padding. This was 4px at the top
+   against 2px at the bottom, so every vial sat a pixel high in its tile - which is what "not centered like
+   the vanilla tiles" is. `align-items` alone only settles the cross axis; the column's own axis is
+   `justify-content`, and without it the picture hangs from the top whatever the padding says. */
 .shot {
   height: 60px;
-  padding: 4px 2px 2px 2px;
+  padding: 2px;
   background: transparent;
   align-items: center;
+  justify-content: center;
+  /* Follows the tile, or a square corner is painted over a round one on hover. */
+  border-radius: 8px;
 }
 
 .shot:hover { background: #eef0f1; }
