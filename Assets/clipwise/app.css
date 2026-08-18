@@ -249,10 +249,16 @@ body {
 
    `color` on an image TINTS it in this engine, and without one here the picture inherits the card's ink and
    comes out dark. White is "leave it alone". The square is honest because the mod pads every icon to one
-   before it sends it - a seed vial's own sprite is one to three and would arrive squashed otherwise. */
+   before it sends it - a seed vial's own sprite is one to three and would arrive squashed otherwise.
+
+   56 AND NOT 48. Going 40 -> 48 moved the layout box and changed not one pixel of the drawn vial: two
+   screenshots of the two builds are byte-identical over the tile, while the computed tree dutifully reported
+   48x48. 56 is the first step that actually draws bigger. So the drawn size is quantised somewhere below the
+   box, and a value picked by eye from the stylesheet can be a no-op that still looks applied in devtools -
+   which is why this number came off a screenshot instead. */
 .shot-img {
-  width: 40px;
-  height: 40px;
+  width: 56px;
+  height: 56px;
   color: #ffffff;
 }
 
@@ -273,8 +279,8 @@ body {
   position: absolute;
   top: 1px;
   right: 1px;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   background: transparent;
   align-items: center;
   justify-content: center;
@@ -283,8 +289,8 @@ body {
 /* The picture is white; `color` tints it. Its size comes from CSS alone - the HTML width and height
    attributes never reach the layout, which runs without Unity and cannot read a PNG. */
 .star-img {
-  width: 11px;
-  height: 11px;
+  width: 14px;
+  height: 14px;
   color: #b3b7bd;
 }
 
@@ -311,12 +317,16 @@ body {
 
 /* Placed by the script from the tile's measured rectangle, so it needs to be out of the flow and nothing
    else. */
+/* THE BACKGROUND IS TRANSLUCENT, THE TEXT IS NOT. Alpha on the fill leaves the tile underneath faintly
+   readable, which is what stops the bubble reading as a second window dropped on the picker; putting the
+   same 75% on the element instead would take the words down with it, and the words are the whole reason
+   the bubble exists. */
 .bubble {
   position: fixed;
   padding: 6px 8px;
   border: 1px solid #3a3d42;
   border-radius: 4px;
-  background: #f2f3f4;
+  background: rgba(242, 243, 244, 0.75);
 }
 
 .bubble-name {
