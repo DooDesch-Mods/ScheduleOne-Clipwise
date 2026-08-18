@@ -337,10 +337,25 @@ function bubble(anchor, row) {
   between two of them, or the grid can re-render under a stationary pointer. Either way the bubble outlives the
   tile it belonged to.
 
-  So the page as a whole also takes the pointer moving anywhere that is NOT a tile as "nothing is hovered". One
-  listener, and it makes a missed mouseleave cost a pixel of movement rather than a stuck bubble.
+  So the page also takes the pointer moving anywhere that is NOT a tile as "nothing is hovered". One listener,
+  and it makes a missed mouseleave cost a pixel of movement rather than a stuck bubble.
+
+  ON THE LIST AND NOT ON `document.body`, AND THAT IS THE WHOLE MOUSE WHEEL.
+
+  Registering any listener gives an element a hit target, and a hit target is an `EventTrigger`, which
+  implements EVERY pointer interface - `IScrollHandler` included. uGUI stops at the first handler it finds, so
+  a listener on the body swallowed every notch before the list underneath could see one. Sideload compensates
+  by forwarding the wheel to the nearest scroll area ABOVE the element (`Interaction.PassScrollingThrough`) -
+  and above the body there is nothing, so the notch died there.
+
+  The probe says it plainly: with this on the body it reported `scroll handled by 'body/hit'`; on a page
+  without it, `scroll handled by 'scroll-viewport'` and the content moves.
+
+  The list is inside the scroll area, so the same forward finds it. And the backstop only ever needed to catch
+  "the pointer moved within the list but off a tile" - leaving the list entirely is what `mouseleave` on the
+  tile already handles.
 */
-document.body.addEventListener('mousemove', (e) => {
+$('rows').addEventListener('mousemove', (e) => {
   if (!tip) return;
   const over = e && e.target ? e.target : null;
   if (over && over.className && String(over.className).indexOf('shot') >= 0) return;
