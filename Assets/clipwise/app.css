@@ -321,14 +321,19 @@ body {
    else. */
 /* THE BACKGROUND IS TRANSLUCENT, THE TEXT IS NOT. Alpha on the fill leaves the tile underneath faintly
    readable, which is what stops the bubble reading as a second window dropped on the picker; putting the
-   same 75% on the element instead would take the words down with it, and the words are the whole reason
-   the bubble exists. */
+   same 80% on the element instead would take the words down with it, and the words are the whole reason
+   the bubble exists.
+
+   THE PURPLE IS THE BREEDING TENT'S OWN, MEASURED. `TentFabric` in breeding_tent.glb is (0.38, 0.055, 0.68)
+   in linear space, which is #A642D7 in sRGB. Sampling the tent in a screenshot gives about #340390 instead,
+   because the tent stands in shade - the authored colour is the one that reads as "the tent", and a colour
+   picked off a lit pixel would have been a different purple in every room. */
 .bubble {
   position: fixed;
   padding: 6px 8px;
   border: 1px solid #3a3d42;
   border-radius: 4px;
-  background: rgba(242, 243, 244, 0.75);
+  background: rgba(166, 66, 215, 0.80);
   /* Born invisible and faded up by the script on the frame after it is placed. `rect()` reports the LAST
      render, so a bubble is positioned one frame late - starting at zero means that frame is not a flash in
      the wrong place. */
@@ -341,13 +346,13 @@ body {
 .bubble-name {
   font-size: 12px;
   font-weight: 700;
-  color: #23262b;
+  color: #ffffff;
 }
 
 .bubble-line {
   font-size: 11px;
   line-height: 14px;
-  color: #5a5f68;
+  color: #ecdcf5;
 }
 
 .empty {
