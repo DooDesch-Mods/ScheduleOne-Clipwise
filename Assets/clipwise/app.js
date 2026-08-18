@@ -362,12 +362,34 @@ $('rows').addEventListener('mousemove', (e) => {
   hideTip();
 });
 
+/*
+  A click that lands in the list but on nothing says WHAT it landed on.
+
+  The report this picker gets is "I click a seed and the card just stays open", and from the outside that has two
+  completely different causes: the pointer reached the page and hit the wrong node, or it never reached the page
+  at all. Nothing in a screenshot separates them, and neither does the pick handler - it is not called in either
+  case.
+
+  So the list itself listens. A click on a tile is answered by the tile and never gets here; anything else names
+  the node that took it, and SILENCE now means the pointer never arrived, which is an answer too. Costs one line
+  in the log per stray click and nothing at all in normal use.
+*/
+$('rows').addEventListener('click', (e) => {
+  const on = e && e.target ? String(e.target.className || '') : '';
+  if (on.indexOf('shot-item') >= 0 || on.indexOf('star') >= 0 || on.indexOf('hide') >= 0) return;
+  s1.call('picker.stray', on || '(unnamed)');
+});
+
 /** One tile: the seed's picture, its star, and the bubble that carries the words. */
 function tileNode(row) {
   const tile = el('div', 'tile' + (row.sel ? ' sel' : ''));
 
   // A button, not a div: the engine wires a hit target unconditionally for button, a, input and textarea.
-  const pick = el('button', 'shot');
+  //
+  // `shot-item` carries no style. It exists so a test can aim at a seed: the Any tile is also a `.shot` and is
+  // drawn FIRST, so `sideload_click .shot` clears the field instead of choosing anything - which reads exactly
+  // like the click being broken, and cost a whole diagnosis round.
+  const pick = el('button', 'shot shot-item');
   const shot = document.createElement('img');
   shot.className = 'shot-img';
   // Supplied by the mod at open time. When a conversion failed there is no picture behind this name, and the
@@ -432,7 +454,7 @@ function renderRows() {
   if (view.none) {
     const line = el('div', 'line');
     const tile = el('div', 'tile' + (view.none.sel ? ' sel' : ''));
-    const pick = el('button', 'shot');
+    const pick = el('button', 'shot shot-any');
     pick.appendChild(el('span', 'shot-cross', 'X'));
     pick.appendChild(el('span', 'shot-name', view.none.name || 'None'));
     pick.addEventListener('click', () => s1.call('picker.pick', ''));
