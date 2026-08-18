@@ -327,7 +327,14 @@ body {
   border: 1px solid #3a3d42;
   border-radius: 4px;
   background: rgba(242, 243, 244, 0.75);
+  /* Born invisible and faded up by the script on the frame after it is placed. `rect()` reports the LAST
+     render, so a bubble is positioned one frame late - starting at zero means that frame is not a flash in
+     the wrong place. */
+  opacity: 0;
+  transition: opacity 110ms;
 }
+
+.bubble.on { opacity: 1; }
 
 .bubble-name {
   font-size: 12px;
