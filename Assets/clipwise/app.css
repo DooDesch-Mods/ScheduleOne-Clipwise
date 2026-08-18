@@ -253,9 +253,11 @@ body {
 
    56 AND NOT 48. Going 40 -> 48 moved the layout box and changed not one pixel of the drawn vial: two
    screenshots of the two builds are byte-identical over the tile, while the computed tree dutifully reported
-   48x48. 56 is the first step that actually draws bigger. So the drawn size is quantised somewhere below the
-   box, and a value picked by eye from the stylesheet can be a no-op that still looks applied in devtools -
-   which is why this number came off a screenshot instead. */
+   48x48. 56 is the first step that actually draws bigger.
+
+   Why those two collapse into the same drawing was not chased - the measurement is the finding, the mechanism
+   is a guess. What it means in practice is the part worth keeping: a size picked by eye out of this file can
+   be a no-op that still reads as applied in the computed tree, so this number came off a screenshot. */
 .shot-img {
   width: 56px;
   height: 56px;
