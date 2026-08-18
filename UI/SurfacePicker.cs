@@ -82,6 +82,9 @@ namespace Clipwise.UI
 
                 if (!Surfaces.IsMounted(SurfaceId)) { Close(); return false; }
 
+                // The wheel is eaten by the crosshair otherwise - see CrosshairGuard for what the probe reported.
+                CrosshairGuard.Mute();
+
                 // After the mount, because the page asks for its pictures as soon as it builds and the store has
                 // to have them by then. Cached across opens, so this is only slow the first time.
                 SurfaceIcons.Supply(_surface, view);
@@ -201,6 +204,10 @@ namespace Clipwise.UI
 
         internal static void Close()
         {
+            // First, and outside the try: the crosshair belongs to the game, and an unmount that throws must not
+            // leave it changed.
+            CrosshairGuard.Restore();
+
             try
             {
                 if (_surface != null || _host != null) Surfaces.Unmount(SurfaceId);
