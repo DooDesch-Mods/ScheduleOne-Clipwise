@@ -249,10 +249,28 @@ function renderDropdown() {
   it, the tile it belonged to was replaced - leaves a node with nobody to remove it. A single node cannot
   accumulate, and anything that shows a new one takes the old one down first.
 
-  Two halves are still needed for WHEN and WHERE: mouseenter/mouseleave, and `rect()`, which reports the last
-  render - so a node the script has only just created reads as zeroes.
+  Two halves are still needed for WHEN and WHERE: `mouseenter`/`mouseleave` say which tile the pointer is on,
+  and the tile's own row is what the bubble is hung inside.
 */
 let tip = null;
+
+/*
+  Which row the bubble on screen belongs to. Not bookkeeping - it is what stops the page rebuilding forever.
+
+  Every DOM write rebuilds the page, and a rebuild destroys and recreates every box on it. The pointer has not
+  moved, but the box under it is a NEW object, so uGUI raises its enter again, which shows a bubble, which
+  writes to the DOM, which rebuilds. A probe listener on the list counted about ten of those rounds a second
+  with the pointer standing still.
+
+  It is not only wasted work. uGUI raises a click only when the press and the release land on the SAME object,
+  and while this runs the tile a player pressed is destroyed several times over before they let go - so no
+  click is raised at all, nothing is picked, and nothing is logged either, since there was no click event to
+  log. That is "I click a seed and the card just stays open", and it needs nothing in the way to happen.
+
+  So a request for the row that is already showing is answered with nothing at all: the first round builds the
+  bubble, the second finds it already there and writes nothing, and the loop stops after one turn.
+*/
+let tipRow = null;
 
 /*
   THE FADE, AND WHY IT IS BUILT LIKE THIS.
@@ -285,14 +303,49 @@ function hideTip() {
   tip.className = 'bubble';
   dying = tip;
   tip = null;
+  tipRow = null;
   reaper = setTimeout(reap, 160);
 }
 
-function showTip(anchor, row) {
-  hideTip();
+/*
+  PLACED INSIDE THE ROW IT BELONGS TO, which is the only frame this page can measure.
 
-  const r = anchor.rect();
-  if (!r || !r.height) return;
+  Everything `rect()` answers is in LAYOUT coordinates: the engine sums each box's parent-relative x and y up
+  the tree, and the scroll offset is not in any of those numbers - scrolling moves a Unity transform, and the
+  layout never hears about it. Measured on a padded list scrolled to the bottom, the last tile reported y=882
+  while it was drawn at about y=525: out by the 357 pixels the list had been scrolled.
+
+  So a `position: fixed` bubble cannot be placed at all, because placing one needs a VIEWPORT coordinate for
+  a box the page can only describe in layout coordinates. Three ways out were checked against the running game
+  and two are closed:
+
+    - The pointer's own position. A probe listener on the list reported `clientX`, `clientY`, `offsetX`,
+      `offsetY`, `normX` and `normY` ALL ZERO for every enter over this surface. Whatever the engine cannot
+      convert here, it answers with zeroes rather than with an error, so a bubble placed from them lands in the
+      top left corner and stays there. Not usable, and not this page's to fix.
+    - The scroll offset itself. Nothing on the DOM surface reports it: no `scrollTop`, no `scrollHeight`.
+
+  What IS exact is the DIFFERENCE between two rects inside the SAME scrolled box: both carry the same missing
+  offset, so it cancels. That is the whole of the placement below - the tile's position within its own row -
+  and the bubble is hung inside that row rather than over the page, so the list carries it along when it
+  scrolls. Nothing left to go stale, and no viewport coordinate needed anywhere.
+*/
+/*
+  148 AND NOT MORE, because the width decides whether the bubble can stand BESIDE its tile at all.
+
+  A row is 380 wide and a tile 69. At 168 the middle column had room on neither side and the bubble ended up
+  drawn over the very seed the pointer was on. 148 is the widest that still leaves 149 to the left of the
+  middle column and 150 to the right of it, so every one of the five columns gets a bubble next to its tile
+  and none of them needs to be pushed back inside the row.
+*/
+const TIP_WIDTH = 148;
+const TIP_GAP = 6;
+
+function showTip(line, anchor, row) {
+  // Already up for this row. See `tipRow`: answering this with a rebuild is what looped the page.
+  if (tip && tipRow === row) return;
+
+  hideTip();
 
   tip = el('div', 'bubble');
   tip.appendChild(el('div', 'bubble-name', row.name));
@@ -300,18 +353,24 @@ function showTip(anchor, row) {
   if (row.tier) tip.appendChild(el('div', 'bubble-line', 'Tier ' + row.tier));
   if (row.effects && row.effects.length) tip.appendChild(el('div', 'bubble-line', row.effects.join(', ')));
 
-  // Beside the tile, on whichever side has room. The card's own width is the only bound the page knows, so it
-  // is measured rather than assumed.
-  const card = document.body.rect();
-  const width = 168;
-  let left = r.x + r.width + 6;
-  if (card && left + width > card.width - 4) left = r.x - width - 6;
-  if (left < 4) left = 4;
+  // The tile's own place in its row, and the row's width. Both are differences or sizes rather than positions
+  // on the page, so both survive the list being scrolled.
+  const box = anchor.rect();
+  const bar = line.rect();
+  const room = bar.width;
+  const at = box.x - bar.x;
+
+  // Beside the tile, on whichever side of it the row has room for, so the seed being pointed at stays visible.
+  // The last line is a guard rather than a case that happens at five to a row: a bubble that ran off the end of
+  // the row would be cut in half by the list, so it is pushed back inside instead.
+  let left = at + box.width + TIP_GAP;
+  if (left + TIP_WIDTH > room) left = at - TIP_GAP - TIP_WIDTH;
+  if (left < 0) left = Math.max(0, Math.min(at, room - TIP_WIDTH));
 
   tip.style.left = Math.round(left) + 'px';
-  tip.style.top = Math.round(r.y) + 'px';
-  tip.style.width = width + 'px';
-  document.body.appendChild(tip);
+  tip.style.width = TIP_WIDTH + 'px';
+  line.appendChild(tip);
+  tipRow = row;
 
   // Faded up a frame later, so the transition has a zero to start from - setting the class in the same pass
   // as the append gives the engine one style to apply and no change to animate.
@@ -323,8 +382,17 @@ function showTip(anchor, row) {
   setTimeout(() => { if (mine === tip) mine.className = 'bubble on'; }, 0);
 }
 
-function bubble(anchor, row) {
-  anchor.addEventListener('mouseenter', () => showTip(anchor, row));
+/*
+  The row is handed in, not looked up, because a page has no way to walk back up from a box to its parent here.
+
+  No listener is added anywhere new: `mouseenter` and `mouseleave` are on the tile's own button, which the
+  engine wires unconditionally for being a `button`. That matters more than it reads - an element with a
+  listener gets a hit target, a hit target answers every pointer interface including the wheel, and uGUI stops
+  at the first one it finds, so one in the wrong place takes the list's scrolling away. Nothing here is new, so
+  nothing here can.
+*/
+function bubble(anchor, row, line) {
+  anchor.addEventListener('mouseenter', () => showTip(line, anchor, row));
   anchor.addEventListener('mouseleave', hideTip);
   // A click re-renders the grid, and the tile this belonged to is gone with it.
   anchor.addEventListener('click', hideTip);
@@ -380,8 +448,9 @@ $('rows').addEventListener('click', (e) => {
   s1.call('picker.stray', on || '(unnamed)');
 });
 
-/** One tile: the seed's picture, its star, and the bubble that carries the words. */
-function tileNode(row) {
+/** One tile: the seed's picture, its star, and the bubble that carries the words. The row the tile goes into is
+    handed in because the bubble hangs inside it - see showTip. */
+function tileNode(row, line) {
   const tile = el('div', 'tile' + (row.sel ? ' sel' : ''));
 
   // A button, not a div: the engine wires a hit target unconditionally for button, a, input and textarea.
@@ -424,7 +493,7 @@ function tileNode(row) {
     tile.appendChild(hide);
   }
 
-  if (view.tips !== false) bubble(pick, row);
+  if (view.tips !== false) bubble(pick, row, line);
   return tile;
 }
 
@@ -436,7 +505,7 @@ function grid(box, rows) {
       line = el('div', 'line');
       box.appendChild(line);
     }
-    line.appendChild(tileNode(row));
+    line.appendChild(tileNode(row, line));
   });
 
   // The last line is short, and a stretched tile would be a different size from the rest of the grid.
