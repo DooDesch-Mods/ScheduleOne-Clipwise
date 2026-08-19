@@ -317,8 +317,24 @@ body {
 
 /* ---- the hover bubble ------------------------------------------------------------------------------------ */
 
-/* Placed by the script from the tile's measured rectangle, so it needs to be out of the flow and nothing
-   else. */
+/* Placed by the script inside the ROW it describes, which is what keeps it on the tile the pointer is on.
+
+   NOT `position: fixed`, and that is the fix for two separate faults at once.
+
+   A fixed box is measured against the viewport, and this page cannot say where a tile is in the viewport: every
+   number it can read is a layout coordinate and the scroll offset is in none of them. On a scrolled list the
+   bubble therefore appeared hundreds of pixels below the tile it belonged to. And the engine treats a fixed box
+   as modal by nature - it gives it a hit target whether or not anything listens to it, because a backdrop has to
+   block the page under it - and draws it last, above everything. So the bubble caught the pointer for whichever
+   tile it happened to cover: the click reached the bubble, the bubble answers nothing, the seed was never
+   chosen, and not even the stray-click reporter saw it, because a fixed box is lifted out of the list it was
+   written inside.
+
+   Absolute, inside the row, is measured against that row and carried along when the list scrolls, and it is an
+   ordinary box in an ordinary place that nothing gives a hit target to.
+
+   `pointer-events: none` stays anyway. It costs nothing, it is what a tooltip is, and it is the one line that
+   still holds if this ever becomes something the engine would otherwise let the player touch. */
 /* THE BACKGROUND IS TRANSLUCENT, THE TEXT IS NOT. Alpha on the fill leaves the tile underneath faintly
    readable, which is what stops the bubble reading as a second window dropped on the picker; putting the
    same 80% on the element instead would take the words down with it, and the words are the whole reason
@@ -329,14 +345,18 @@ body {
    because the tent stands in shade - the authored colour is the one that reads as "the tent", and a colour
    picked off a lit pixel would have been a different purple in every room. */
 .bubble {
-  position: fixed;
+  position: absolute;
+  /* The row's own top. The bubble is beside the tile rather than under it, so it needs no vertical offset -
+     and having none is what makes it impossible to place on the wrong row. */
+  top: 0;
+  pointer-events: none;
   padding: 6px 8px;
   border: 1px solid #3a3d42;
   border-radius: 4px;
   background: rgba(166, 66, 215, 0.80);
-  /* Born invisible and faded up by the script on the frame after it is placed. `rect()` reports the LAST
-     render, so a bubble is positioned one frame late - starting at zero means that frame is not a flash in
-     the wrong place. */
+  /* Born invisible and faded up by the script on the frame after it is placed: the engine has one style to
+     apply and no change to animate if both happen in the same pass, and a bubble that appears at full strength
+     is a bubble that flashes. */
   opacity: 0;
   transition: opacity 110ms;
 }
