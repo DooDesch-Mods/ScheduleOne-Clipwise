@@ -502,6 +502,10 @@ namespace Clipwise.UI
                   // Tier, or 0. Read off the tag rather than asked of the mod: a tag is what every mod already
                   // sends, so sorting by tier costs nothing to support and works for the next one too.
                   .Append(",\"tier\":").Append(TierOf(row))
+                  // Whether there IS a picture for this row. A tile draws one or the other, never an <img> that
+                  // resolves to nothing: ten of nineteen tiles came out as blank grey boxes on a save whose
+                  // strain catalogue had registered its seeds but not yet dressed them.
+                  .Append(",\"icon\":").Append(SurfaceIcons.Has(row.ItemId) ? "true" : "false")
                   .Append(",\"fav\":").Append(Prefs.UserPrefs.IsFavourite(row.ItemId) ? "true" : "false")
                   .Append(",\"sel\":").Append(row.Selected ? "true" : "false")
                   // What the hover bubble says beyond the name and the pair. Sent with the row rather than

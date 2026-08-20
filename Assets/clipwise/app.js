@@ -41,6 +41,16 @@ let TILE = TILE_MIN;
 const PAD_LEFT = 50;    // .page.left  - 20 + 30, the right one clearing the fold and the perforation
 const PAD_RIGHT = 54;   // .page.right - 32 + 22, the left one clearing the other half of the crease
 
+/* `.list`'s own right padding. The scroll bar is painted OVER the content rather than laid out beside it, so
+   without this the bar sits on every section count and on the last column of every line. Anything laid out
+   inside the list is divided out of the room that is left, not out of the whole sheet. */
+const LIST_PAD = 10;
+
+/* The header vial on the facing sheet and the gap after it, from `.rec-bud` / `.rec-top`. The pills stand in
+   the name's column, so what is left beside the vial is the width they are chunked against. */
+const BUD_W = 72;
+const BUD_GAP = 16;
+
 let view = {
   title: 'Select', tabs: [], rows: [], none: null, added: 'Added by mods', tags: [],
   w: 840, h: 620, pageW: 420, pageRW: 420, gap: 0,
@@ -110,6 +120,12 @@ function remember() {
 
 /* ---- filtering and sorting ------------------------------------------------------------------------------ */
 
+/** Whether this row carries an effect, whatever case either side spelled it in. */
+function hasEffect(row, name) {
+  const want = String(name || '').toLowerCase();
+  return (row.effects || []).some((e) => String(e).toLowerCase() === want);
+}
+
 function visible() {
   const q = query.trim().toLowerCase();
 
@@ -123,7 +139,10 @@ function visible() {
 
     // AND, not OR. Ticking two effects asks for a seed that has both - which is the question a breeder is
     // actually holding when they tick the second one.
-    for (const fx of f.fx) if ((row.effects || []).indexOf(fx) < 0) return false;
+    //
+    // Matched without regard to case, because the same effect arrives spelled two ways: the game's own rows
+    // report "calming" and a mod that fills the field itself writes "Calming". One chip, either spelling.
+    for (const fx of f.fx) if (!hasEffect(row, fx)) return false;
     for (const tag of f.tags) if ((row.tags || []).indexOf(tag) < 0) return false;
 
     if (!q) return true;
@@ -198,9 +217,19 @@ function leftRoom() {
   return Math.round(view.pageW || 420) - PAD_LEFT;
 }
 
+/** What is left inside the scrolling list, which is everything the grid and its headings are laid out against. */
+function listRoom() {
+  return leftRoom() - LIST_PAD;
+}
+
 /** The same for the facing sheet. */
 function rightRoom() {
   return Math.round(view.pageRW || view.pageW || 420) - PAD_RIGHT;
+}
+
+/** The width of the name's column on the facing sheet: the sheet, less the vial standing beside it. */
+function recRoom() {
+  return rightRoom() - BUD_W - BUD_GAP;
 }
 
 /*
@@ -214,7 +243,7 @@ function rightRoom() {
   same size as everything above it, or a group reads as a different grid rather than part of one.
 */
 function tileSize() {
-  const room = leftRoom() - TIER_INDENT;
+  const room = listRoom() - TIER_INDENT;
   const size = Math.floor((room - TILE_GAP * (PER_ROW - 1)) / PER_ROW);
   return Math.max(TILE_MIN, Math.min(TILE_MAX, size));
 }
@@ -260,10 +289,13 @@ function renderChips() {
 
   // What the dock has ticked, said on the sheet the player is looking at. Clicking it clears them, which is the
   // only thing this chip could usefully do that the dock does not already do better.
+  //
+  // ALWAYS DRAWN, EVEN AT ZERO. Appearing only once something was ticked made the chip row change width the
+  // moment a filter went on, which moved `Favorites` under the pointer - and the row is where a player looks to
+  // find out whether a filter IS on, so the one state worth showing is the one that was being hidden.
   const ticked = f.fx.length + f.tags.length;
-  if (ticked) {
-    chip(wanted, 'Effects ' + ticked, true, () => { f.fx.length = 0; f.tags.length = 0; });
-  }
+  chip(wanted, ticked ? 'Effects ' + ticked : 'Effects', ticked > 0,
+       () => { f.fx.length = 0; f.tags.length = 0; });
 
   if (view.hiddenCount || f.hidden) {
     chip(wanted, 'Hidden (' + (view.hiddenCount || 0) + ')', f.hidden, () => { f.hidden = !f.hidden; });
@@ -329,9 +361,14 @@ function groups() {
 function filterDefs() {
   const out = [];
 
+  // ONE CHIP PER EFFECT, NOT ONE PER SPELLING. The game's own rows report "calming" and a mod that fills the
+  // field itself writes "Calming", so a case-sensitive list put both in the dock - the same filter twice, side
+  // by side, each one ticking half the catalogue.
   const names = [];
   for (const row of view.rows || []) {
-    for (const e of row.effects || []) if (names.indexOf(e) < 0) names.push(e);
+    for (const e of row.effects || []) {
+      if (!names.some((n) => n.toLowerCase() === String(e).toLowerCase())) names.push(e);
+    }
   }
   names.sort((a, b) => a.toLowerCase() < b.toLowerCase() ? -1 : 1);
   // Capitalised for the chip only. The game's own effect names arrive lowercase and a mod's tag labels do not,
@@ -458,7 +495,9 @@ function money(n) {
 
 function hours(n) {
   const v = Number(n) || 0;
-  return v > 0 && v < 2000000000 ? v + 'h' : '';
+  // "12 h", with the space: the number is written in the hand and the unit is printed, so they are two marks
+  // rather than one word.
+  return v > 0 && v < 2000000000 ? v + ' h' : '';
 }
 
 /** "Tier 4 - Breed to Seed Strains", or whichever half of it exists. */
@@ -487,17 +526,37 @@ function restLine(row) {
   return bits.join(' - ');
 }
 
-/** The vial, or the dashed frame with the letter in it when there is no item to show a picture of. */
-function budNode(row, any) {
+/*
+  THE INITIALS OF A NAME, for a seed whose picture has not arrived.
+
+  Two letters, because one is not a name and three do not fit a tile. Words first - "Purple Kush" is PK - and
+  the first two letters of a single word otherwise. Upper case: this stands in for a picture, not for the name
+  written out, and the name is on the facing sheet anyway.
+*/
+function initials(name) {
+  const words = String(name || '').trim().split(/\s+/).filter((w) => w);
+  if (words.length === 0) return '?';
+  if (words.length === 1) return words[0].substring(0, 2).toUpperCase();
+  return (words[0].charAt(0) + words[1].charAt(0)).toUpperCase();
+}
+
+/** The vial, or the frame with the letter in it when there is no item to show a picture of. Smaller in the
+    resting card, where it shares a line instead of heading a record. */
+function budNode(row, any, rest) {
   if (any) return el('div', 'rec-any', 'X');
-  return img('rec-bud', 's1://icon/' + row.id);
+  const small = rest ? ' small' : '';
+  if (row.icon === false) return el('div', 'rec-mark' + small, initials(row.name || row.id));
+  return img('rec-bud' + small, 's1://icon/' + row.id);
 }
 
 /** The head block every state shares: picture, name, one line under it. In the resting card the name is
-    written smaller, because it shares the block with the line that says which field it belongs to. */
+    written smaller, because it shares the block with the line that says which field it belongs to.
+
+    ANSWERS THE NAME'S COLUMN, not the block: the effect pills are written under the name and have to start
+    where it does, which they cannot do from outside it. */
 function recTop(box, row, any, sub, rest) {
   const top = el('div', 'rec-top' + (rest ? ' spaced' : ''));
-  top.appendChild(budNode(row, any));
+  top.appendChild(budNode(row, any, rest));
 
   const id = el('div', 'rec-id');
   const name = 'rec-name' + (rest ? ' small' : '') + (any ? ' dim' : '');
@@ -505,10 +564,14 @@ function recTop(box, row, any, sub, rest) {
   if (sub) id.appendChild(el('div', 'rec-sub', sub));
   top.appendChild(id);
 
-  if (!any && row.fav) top.appendChild(img('rec-star', 'star.png'));
+  // ONLY IN THE RESTING CARD. On the record it hung in the far top corner of the sheet, a gold mark with
+  // nothing beside it - the grid already stars the tile the pointer is on, and saying it twice on one screen
+  // reads as a stray. In the resting card it belongs: that block is the state of the field, and whether the
+  // field's own seed is a favourite is part of it.
+  if (rest && !any && row.fav) top.appendChild(img('rec-star', 'star.png'));
 
   box.appendChild(top);
-  return top;
+  return id;
 }
 
 /** The two parents of a cross, as the mod wrote them: "A x B". A vanilla seed has no note and gets no cells. */
@@ -564,27 +627,28 @@ function renderSheet() {
   // ---- hovered: the full record of whatever the pointer is on
   if (shown && shown !== ANY) {
     const row = shown;
-    recTop(box, row, false, subLine(row));
+    const id = recTop(box, row, false, subLine(row));
 
     // Chunked in script like every other row of things on this page: there is no flex-wrap here, and a strain
-    // with eight effects would otherwise run off the sheet and be clipped without a mark to say so.
+    // with eight effects would otherwise run off the sheet and be clipped without a mark to say so. Chunked
+    // against the NAME'S column rather than the sheet, because that is where they stand.
     if (row.effects && row.effects.length) {
-      const room = rightRoom();
+      const room = recRoom();
       let line = null;
       let used = 0;
       for (const e of row.effects) {
         const w = dchipWidth(e);
         if (!line || used + w > room) {
           line = el('div', 'pill-row');
-          box.appendChild(line);
+          id.appendChild(line);
           used = 0;
         }
         line.appendChild(el('span', 'pill', cap(e)));
-        used += w + 5;
+        used += w + 6;
       }
     }
 
-    box.appendChild(el('div', 'rec-rule'));
+    box.appendChild(img('rec-rule', 'rule.png'));
 
     crossNode(box, row.note);
     cellsNode(box, row);
@@ -683,7 +747,7 @@ function tipX(col) {
 /** How wide the label may be at this column, on the side it will stand. A tier group's line starts 14 in, so
     that much less paper is left beside it. */
 function tipRoom(col, flip, indent) {
-  const room = leftRoom() - (indent ? TIER_INDENT : 0);
+  const room = listRoom() - (indent ? TIER_INDENT : 0);
   return flip ? tipX(col) - TIP_GAP : room - (tipX(col) + TILE + TIP_GAP);
 }
 
@@ -805,9 +869,10 @@ function tileNode(row) {
   // like the click being broken, and cost a whole diagnosis round.
   const pick = el('button', 'shot shot-item');
   // Supplied by the mod at open time, off the LIVE item definition - which is what lets a mod that tints a seed
-  // per strain have every vial on the grid look like itself.
-  const picture = img('shot-img', 's1://icon/' + row.id);
-  pick.appendChild(picture);
+  // per strain have every vial on the grid look like itself. `icon` is false when the store has none, and then
+  // the pen writes the initials rather than the tile drawing an empty box - see `.shot-mark`.
+  const picture = row.icon === false ? null : img('shot-img', 's1://icon/' + row.id);
+  pick.appendChild(picture || el('span', 'shot-mark', initials(row.name || row.id)));
   sizeTile(tile, pick, picture);
   pick.addEventListener('click', () => s1.call('picker.pick', row.id));
   pick.addEventListener('mouseenter', () => showRecord(row));
@@ -911,13 +976,23 @@ function sortKnob(head) {
   head.appendChild(knob);
 }
 
-/** A section head: the name in the hand, the two ordering controls, and the count on the far side. */
-function sectionHead(box, name, count, withTier) {
+/*
+  A section head: the name in the hand, the hairline, then whatever orders what is under it, then the count.
+
+  THE HAIRLINE COMES SECOND, NOT LAST. With the knobs pressed up against the label the head read as a title
+  with two buttons welded to it and a stroke trailing off to the right. The rule runs from the name to the
+  controls, which is what makes the controls belong to the count end of the line rather than to the name.
+
+  THE CONTROLS ARE THE MOD SECTION'S. Favourites and the game's own seeds carry a name, a rule and a number and
+  nothing else - there is no tier to order there, and a sort control repeated over every heading is three
+  copies of one switch.
+*/
+function sectionHead(box, name, count, withTier, withSort) {
   const head = el('div', 'section');
   head.appendChild(el('div', 'section-name', name));
-  if (withTier) tierKnob(head);
-  sortKnob(head);
   head.appendChild(el('div', 'section-fill'));
+  if (withTier) tierKnob(head);
+  if (withSort) sortKnob(head);
   head.appendChild(el('div', 'section-count', String(count)));
   box.appendChild(head);
 }
@@ -933,7 +1008,7 @@ function tiersOf(rows) {
 /** One mod's section: its heading, then a group per tier that is actually in the list. */
 function modSection(box, key, rows) {
   const tiers = tiersOf(rows);
-  sectionHead(box, tabLabel(key), rows.length, tierGroups && tiers.length > 1);
+  sectionHead(box, tabLabel(key), rows.length, tierGroups && tiers.length > 1, true);
 
   if (!tierGroups) { grid(box, rows, false); return; }
 
@@ -942,9 +1017,11 @@ function modSection(box, key, rows) {
 
     // A tier nobody has reached yet must not announce itself by having an empty heading - and an untagged
     // item has no tier to head at all, so it simply follows the last group.
+    // "Tier 1", not "TIER 1": the letter-spacing and the weight are what mark it as printed matter, and full
+    // caps on top of both made a sub-heading shout louder than the handwritten section name above it.
     if (tier > 0) {
       const head = el('div', 'tier');
-      head.appendChild(el('div', 'tier-name', 'TIER ' + tier));
+      head.appendChild(el('div', 'tier-name', 'Tier ' + tier));
       head.appendChild(el('div', 'tier-fill'));
       head.appendChild(el('div', 'tier-count', String(group.length)));
       box.appendChild(head);
@@ -1006,20 +1083,25 @@ function renderRows(rows) {
 
   // Headings only where there is something under them, so a filter that empties one half does not leave a label
   // standing over nothing.
-  if (favs.length) {
-    sectionHead(box, 'Favourites', favs.length, false);
-    grid(box, favs, false);
-  }
-
-  if (vanilla.length) {
-    sectionHead(box, 'Vanilla seeds', vanilla.length, false);
-    grid(box, vanilla, false);
-  }
-
   // ONE SECTION PER MOD, not one for "everything a mod added". Two strain catalogues installed at once used to
   // land in the same heap under the same heading; the category each mod registered is the split it asked for.
   const keys = [];
   for (const row of modded) if (keys.indexOf(row.tab || '') < 0) keys.push(row.tab || '');
+
+  // The sort control belongs to a mod's section - see sectionHead. With no mod installed there is no such
+  // section, and the switch would have nowhere to live at all, so on that save the game's own seeds carry it.
+  const orphanSort = keys.length === 0;
+
+  if (favs.length) {
+    sectionHead(box, 'Favourites', favs.length, false, false);
+    grid(box, favs, false);
+  }
+
+  if (vanilla.length) {
+    sectionHead(box, 'Vanilla seeds', vanilla.length, false, orphanSort);
+    grid(box, vanilla, false);
+  }
+
   for (const key of keys) modSection(box, key, modded.filter((row) => (row.tab || '') === key));
 }
 

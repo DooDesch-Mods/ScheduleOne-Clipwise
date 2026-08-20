@@ -154,17 +154,23 @@ body {
 
 /* ---- head -------------------------------------------------------------------------------------------- */
 
+/* One written line: the three parts sit on a shared baseline rather than on a shared centre, which is what
+   stops a 25px title and an 11px count reading as two rows of type in one strip. */
 .head {
   flex: none;
   flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
   height: 30px;
 }
 
+/* NO FIXED WIDTH, and that is the design rather than an oversight: the title is centred in what is LEFT after
+   Back and the count, so it sits a little right of the sheet's own middle. Balancing the two ends with equal
+   spacers centres it perfectly and is a different drawing. */
 .back {
-  width: 92px;
+  flex: none;
   height: 26px;
+  padding-right: 6px;
   font-family: game-hand;
   font-size: 21px;
   color: #2b3c66;
@@ -185,18 +191,24 @@ body {
   white-space: nowrap;
 }
 
-/* Balances the Back button so the title sits in the middle of the sheet rather than the middle of what is left. */
+/* WRITTEN, NOT PRINTED. It is a tally someone put in the corner of the sheet, not a field on the form - the
+   whole head row is one hand, and a sans number at the end of it broke the line in two. */
 .head-count {
-  width: 92px;
-  font-size: 11px;
-  color: #8b9098;
+  flex: none;
+  font-family: game-hand;
+  font-size: 15px;
+  color: #6b7079;
   text-align: right;
-  align-items: center;
+  white-space: nowrap;
 }
 
 /* ---- the search line --------------------------------------------------------------------------------------- */
 
-/* A written line on the pad, not a control dropped onto it: the word, then the query on a baseline rule. */
+/* A written line on the pad, not a control dropped onto it: the word, then the query on a baseline rule.
+
+   THE RULE BELONGS TO THE LINE, NOT TO THE FIELD. On the field it started where the field did, so the word
+   `Search` stood on bare paper with the stroke beginning to its right - a box with a label beside it. On the
+   line the stroke runs the full width and both hands sit on it, which is what makes it a ruled line. */
 .find-line {
   flex: none;
   flex-direction: row;
@@ -204,6 +216,7 @@ body {
   gap: 8px;
   height: 28px;
   margin: 6px 0 0 0;
+  border-bottom: 1.6px solid #3a3d42;
 }
 
 .find-label {
@@ -219,10 +232,6 @@ body {
   min-width: 0;
   height: 26px;
   padding: 0 2px;
-  /* The baseline rule, and it has to be the shorthand: a bare `border-color` with a width on one edge leaves
-     the border STYLE unset, and nothing is drawn at all. One colour per box either way - four border colours
-     do not exist here. */
-  border-bottom: 1.6px solid #3a3d42;
   background: transparent;
   /* WRITTEN, NOT TYPED. The query is the player's own hand on the pad, so it carries the handwritten face and
      the pen's ink; the word `Search` in front of it is the dimmer hand of a form that was printed empty. */
@@ -243,7 +252,7 @@ body {
 .chips {
   flex: none;
   gap: 4px;
-  margin: 10px 0 0 0;
+  margin: 10px 0 10px 0;
 }
 
 .chip-row {
@@ -282,10 +291,15 @@ body {
 
 /* ---- the list -------------------------------------------------------------------------------------------- */
 
+/* THE SCROLLBAR IS DRAWN OVER THE CONTENT, NOT BESIDE IT. It takes no layout width, so with the list running
+   to its own right edge the bar sat on top of every section count and the last column of every line - the "13"
+   beside a heading was half a digit behind a grey stripe. The padding is the room it needs; `LIST_PAD` in
+   app.js is the same number, because the tile size is divided out of what is left. */
 .list {
   flex: 1;
   /* Without this the list never shrinks and so never scrolls. */
   min-height: 0;
+  padding-right: 10px;
   overflow: auto;
 }
 
@@ -365,7 +379,11 @@ body {
 }
 
 /* The sub-rule is lighter than the section's own, so the tier reads as a division of the heading above it
-   rather than another heading of the same rank. */
+   rather than another heading of the same rank.
+
+   THE DESIGN ASKS FOR A DOTTED RULE AND THIS ENGINE HAS NO DASH PATTERN. `dotted` and `dashed` are recognised
+   as line styles and every one of them is drawn solid (Sideload/Css/StyleApplier.cs:1257-1260), so
+   `border-top: 1px dotted` and this box are the same stroke. Lighter is the only difference left to carry. */
 .tier-fill {
   flex: 1;
   min-width: 0;
@@ -417,9 +435,9 @@ body {
 
 /* The game draws the None option as an empty frame with a cross in it, and so does this.
 
-   SOLID, THOUGH THE DESIGN ASKS FOR DASHED. `border: 1.6px dashed` drew NOTHING at all here - the Any tile
-   came out as a bare X on the paper with no frame round it, while every solid border on the page rendered.
-   The width is not the problem (the search rule is 1.6px and draws); it is the style keyword.
+   SOLID, THOUGH THE DESIGN ASKS FOR DASHED, and writing `dashed` would change nothing: the engine recognises
+   every CSS line style and draws all of them as one solid stroke - it has no dash pattern at all
+   (Sideload/Css/StyleApplier.cs:1257-1260). Saying `solid` is saying what is drawn.
 
    DARKER THAN THE DESIGN'S #a9adb4, and every unfilled outline on this page is. The paper is LIT and the ink
    is not: at noon the sheet renders around 193 and at 4am around 119, so a light grey line that reads on a
@@ -469,6 +487,43 @@ body {
   text-align: center;
   align-items: center;
   justify-content: center;
+}
+
+/* A SEED WITHOUT A PICTURE IS INITIALLED, NOT LEFT BLANK.
+   An `<img>` whose `s1://` name is not in the store draws nothing at all, so a strain catalogue that has
+   registered its seeds but not yet dressed them put ten empty grey boxes in the grid - which reads as a broken
+   page rather than as a picture that has not arrived. The pen writes the name's initials instead, in the same
+   faint hand a placeholder is written in. */
+.shot-mark {
+  flex: 1;
+  font-family: game-hand;
+  font-size: 20px;
+  color: #7d89a5;
+  text-align: center;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* The same on the facing sheet, at the size of the vial it stands in for. */
+.rec-mark {
+  flex: none;
+  width: 72px;
+  height: 72px;
+  font-family: game-hand;
+  font-size: 30px;
+  color: #7d89a5;
+  text-align: center;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.rec-mark.small {
+  width: 56px;
+  height: 56px;
+  font-size: 24px;
 }
 
 /* ---- the star -------------------------------------------------------------------------------------------- */
@@ -635,7 +690,8 @@ body {
   background: #e4e6e8;
 }
 
-/* Nothing is planted: the same card drawn as an empty frame. Solid, not dashed - see `.tile.any`. */
+/* Nothing is planted: the same card drawn as an empty frame. Solid because the engine has no dash - see
+   `.tile.any`. */
 .rec-card.any {
   border: 1.4px solid #9aa0a7;
   background: transparent;
@@ -648,21 +704,38 @@ body {
   color: #8b9098;
 }
 
+/* THE VIAL AND THE NAME START AT THE SAME HEIGHT. Centred, the two were settled against each other rather
+   than against the top of the sheet, so a record with two rows of pills pushed the vial down the page while
+   one with none pulled it up. The record is written from the top down: the picture, then the name beside it. */
 .rec-top {
   flex-direction: row;
-  align-items: center;
+  align-items: flex-start;
   gap: 16px;
 }
 
-.rec-top.spaced { margin-top: 9px; }
+/* The resting card is the other reading: one line saying what the field holds, so its picture is settled
+   against the line rather than standing at the top of a block. */
+.rec-top.spaced {
+  align-items: center;
+  gap: 14px;
+  margin-top: 9px;
+}
 
 /* `color` TINTS a picture in this engine, so white is "leave it alone". The mod pads every icon to a square
-   before it sends it, which is why this box can be one. */
+   before it sends it, which is why this box can be one - and why it is a SQUARE and not the 36x85 of the mock:
+   a padded picture stretched into an upright box is a stretched vial. */
 .rec-bud {
   flex: none;
+  width: 72px;
+  height: 72px;
+  color: #ffffff;
+}
+
+/* Smaller in the resting card, where it shares a line rather than heading a record. NO DESCENDANT SELECTOR -
+   `.rec-top.spaced .rec-bud` does not arrive here; see the note on `.page.right.shut`. */
+.rec-bud.small {
   width: 56px;
   height: 56px;
-  color: #ffffff;
 }
 
 /* The Any state carries the same frame the Any tile does, with the same letter in it. */
@@ -712,26 +785,36 @@ body {
   color: #e0a72c;
 }
 
-/* Hand-drawn on the mock, a rule here: a stroke is a sprite, not a glyph. This one divides the record itself
-   rather than separating two lists, so it carries ink weight and not a hairline. */
+/*
+  THE ONE HAND-DRAWN STROKE ON THE SHEET, AND IT IS A PICTURE.
+
+  The design's rule wanders - it is a line someone drew under a heading, not a border. There is no way to say
+  that in CSS and no glyph for it that survives Latin-1, so it is shipped the way `star.png` is: a white PNG of
+  the design's own bezier, tinted by `color`. `width: 100%` stretches 366 pixels of stroke across whatever the
+  sheet turned out to be, which for a wobble is invisible.
+*/
 .rec-rule {
   flex: none;
-  height: 2px;
-  margin: 14px 0 8px 0;
-  background: #3a3d42;
+  width: 100%;
+  height: 7px;
+  margin: 16px 0 6px 0;
+  color: #3a3d42;
 }
 
+/* IN THE NAME'S OWN COLUMN, not under the whole block. As a sibling of the header the pills started at the
+   sheet's left edge while the name started past the vial, so the two read as separate things stacked up the
+   page instead of as one record with the effects written under its name. */
 .pill-row {
   flex-direction: row;
   align-items: center;
-  gap: 5px;
-  margin-top: 8px;
+  gap: 6px;
+  margin-top: 10px;
 }
 
 /* Filled, like a ticked chip: an effect on the record is a fact about the seed, not something to switch. */
 .pill {
   flex: none;
-  height: 21px;
+  height: 19px;
   padding: 0 10px;
   border-radius: 12px;
   background: #3a3d42;
@@ -747,13 +830,17 @@ body {
   flex-direction: row;
   align-items: center;
   gap: 10px;
+  margin: 8px 0 16px 0;
 }
 
+/* DARKER THAN THE MOCK'S #b1b6bc, for the reason written out at `.tile.any`: the paper is lit and the ink is
+   not, so a pale outline that reads on a flat mock is simply not there on the board at night. The two boxed
+   cells came out as two slightly lighter patches with no frame at all. */
 .parent {
   flex: 1;
   min-width: 0;
   padding: 8px 10px;
-  border: 1px solid #b1b6bc;
+  border: 1px solid #9aa0a7;
   border-radius: 7px;
   background: #e4e6e8;
 }
@@ -790,14 +877,15 @@ body {
   flex-direction: row;
   align-items: stretch;
   gap: 10px;
-  margin-top: 10px;
+  margin-bottom: 16px;
 }
 
+/* See `.parent`: the mock's #c2c6cb is invisible on lit paper. */
 .cell {
   flex: 1;
   min-width: 0;
   padding: 9px 8px;
-  border: 1px solid #c2c6cb;
+  border: 1px solid #9aa0a7;
   border-radius: 7px;
   background: #e0e2e5;
 }
