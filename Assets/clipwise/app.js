@@ -84,6 +84,11 @@ let tierDesc = false;
 /* Has the opening effect run. False for exactly one render - the one it starts from. */
 let opened = false;
 
+/* The sheet is folding back and the surface goes when it lands. Everything that would write to the document
+   stands down while this is true: one write is a whole page rebuilt (405ms at two hundred seeds), which lands
+   as a hole in the middle of a 300ms effect - see shut(). */
+let closing = false;
+
 /* ---- the wire ------------------------------------------------------------------------------------------ */
 
 function load() {
@@ -524,6 +529,8 @@ let hoverTimer = 0;
 let hoverWant = null;
 
 function showRecord(row, slot) {
+  if (closing) return;
+
   const at = slot || 0;
   const same = (shown === row || (shown && row && shown.id === row.id)) && shownAt === at;
   if (same) {
@@ -554,6 +561,8 @@ function showRecord(row, slot) {
   one of those raises a spurious leave.
 */
 function leaveRecord(slot) {
+  if (closing) return;
+
   const at = slot || 0;
   if (hoverWant) { if (hoverWant.slot !== at) return; }
   else if (shownAt !== at) return;
@@ -568,6 +577,12 @@ function hoverCatchUp() {
   const want = hoverWant;
   hoverWant = null;
   if (!want) return;
+
+  // A hover queued up to 90ms ago and answered now, while the sheet is folding away. showRecord and
+  // leaveRecord stand down during a close, but the pointer that entered a tile BEFORE Escape was pressed has
+  // its answer already in the queue - and this one ends in renderSheet, which is the whole page rebuilt on top
+  // of the fold. Dropped rather than deferred: it is a note about a sheet that is leaving.
+  if (closing) return;
 
   if (want.gone) {
     // The record is left exactly as it is - see leaveRecord.
@@ -860,6 +875,24 @@ $('rows').addEventListener('click', (e) => {
 });
 
 /*
+  A PRESS IS HELD OPEN UNTIL IT IS LET GO, AND NOTHING REBUILDS UNDER IT.
+
+  uGUI raises a click only when the press and the release land on the SAME GameObject
+  (Sideload/Input/Interaction.cs:281). Every rebuild destroys and remakes every tile, so a rebuild between the
+  two means the release lands on a different object and NO click is raised at all - not a wrong one, none. The
+  page sees nothing, the mod logs nothing, and the player has "clicked a seed and nothing happened".
+
+  So a press on the grid marks the page busy, and the one rebuild that can arrive on its own - late icons -
+  waits for the release. Leaving the pressed element clears it too: once the pointer is off it, uGUI will not
+  raise that click anyway, so there is nothing left to protect.
+*/
+let pressed = false;
+
+$('rows').addEventListener('mousedown', () => { pressed = true; });
+$('rows').addEventListener('mouseup', () => { pressed = false; iconsCatchUp(); });
+$('rows').addEventListener('mouseout', () => { pressed = false; iconsCatchUp(); });
+
+/*
   THE HOVER LABEL.
 
   WIDTH IS THE CONTENT'S NOW, AND CAPPED. A fixed 148 was wide enough for a long name and far too wide for a
@@ -1030,7 +1063,9 @@ function tileNode(row, slot) {
   const picture = row.icon === false ? null : img('shot-img', 's1://icon/' + row.id);
   pick.appendChild(picture || el('span', 'shot-mark', initials(row.name || row.id)));
   sizeTile(tile, pick, picture);
-  pick.addEventListener('click', () => s1.call('picker.pick', row.id));
+  // Not while the sheet is folding away: the tiles are still on screen and still take a click, and a seed
+  // chosen after the player asked to leave is written to the pot exactly as if they had meant it.
+  pick.addEventListener('click', () => { if (!closing) s1.call('picker.pick', row.id); });
   // The TILE, not the seed: a favourite is on the page twice and only one of them is under the pointer.
   pick.addEventListener('mouseenter', () => showRecord(row, slot));
   // The slip goes when the pointer does - see leaveRecord.
@@ -1229,7 +1264,7 @@ function anyTile() {
   const tile = el('div', 'tile any' + (view.none.sel ? ' sel' : ''));
   const pick = el('button', 'shot shot-any');
   pick.appendChild(el('span', 'shot-cross', 'X'));
-  pick.addEventListener('click', () => s1.call('picker.pick', ''));
+  pick.addEventListener('click', () => { if (!closing) s1.call('picker.pick', ''); });
   pick.addEventListener('mouseenter', () => showRecord(ANY));
   tile.appendChild(pick);
   sizeTile(tile, pick, null);
@@ -1321,6 +1356,10 @@ function centreHead() {
 /* ---- render ---------------------------------------------------------------------------------------------- */
 
 function render() {
+  // A rebuild during the closing fold is a stall of one to twelve frames in the middle of it, and nothing it
+  // draws is looked at - the sheet is on its way off the screen. See shut().
+  if (closing) return;
+
   shell();
 
   // Divided out of the sheet the mod measured, before anything is laid out against it.
@@ -1341,7 +1380,7 @@ function render() {
   renderDock();
 }
 
-/* ---- the opening effect ---------------------------------------------------------------------------------- */
+/* ---- the fold -------------------------------------------------------------------------------------------- */
 
 /*
   THE SHEET IS MOVED FRAME BY FRAME FROM SCRIPT, and that is not the first thing that was tried.
@@ -1361,31 +1400,95 @@ function render() {
 */
 const FLIP_MS = 300;
 const FLIP_STEPS = 14;
+const FLIP_STEP_MS = Math.round(FLIP_MS / FLIP_STEPS);
 
-function flip() {
+/* How wide the sheet was left, 0 shut and 1 open. Read by a fold that starts while another one is running -
+   Escape 100ms into the opening fold closes from where the sheet actually is, not from full width. */
+let foldAt = 0;
+
+/* At most one fold at a time. Two intervals writing the same transform is not a race that resolves: the
+   opening one finishes by CLEARING the transform, which snaps a half-closed sheet back to full width. */
+let foldTimer = 0;
+
+/** Step the right sheet through `width(t)`, t running 0..1 over FLIP_STEPS steps, and run `done` after the last
+    write. `stepMs` is only ever passed by the slow-motion switch - see shut(). */
+function foldSheet(width, done, stepMs) {
+  if (foldTimer) { clearInterval(foldTimer); foldTimer = 0; }
+
   const page = $('pageR');
-  if (!page) { opened = true; return; }
+  if (!page) { done(null); return; }
 
   let step = 0;
-  const timer = setInterval(() => {
+  foldTimer = setInterval(() => {
     step++;
     const t = Math.min(1, step / FLIP_STEPS);
-    // The same shape `ease-out` draws, worked out here because the engine will not draw it - see above.
-    const eased = 1 - Math.pow(1 - t, 3);
-    page.style.transform = 'scaleX(' + eased.toFixed(3) + ')';
+    foldAt = width(t);
+    page.style.transform = 'scaleX(' + foldAt.toFixed(3) + ')';
 
     if (t < 1) return;
-    clearInterval(timer);
+    clearInterval(foldTimer);
+    foldTimer = 0;
+    done(page);
+  }, stepMs || FLIP_STEP_MS);
+}
 
+function flip() {
+  // The same shape `ease-out` draws, worked out here because the engine will not draw it - see above.
+  foldSheet((t) => 1 - Math.pow(1 - t, 3), (page) => {
     // CLEARED BY HAND. `#pageR` is markup and not something `render` rebuilds, so an inline transform left on
     // it outlives the effect - and a transform that is still there paints the sheet's CHILDREN through it. Seen
     // by leaving one at 0.75: the dock and the record drew clipped forty pixels short of the sheet's own
     // edge while every rect still answered the full width. `scaleX(1)` is identity and would have looked
     // right, which is exactly why it would have sat there unnoticed until something wrote a different value.
-    page.style.transform = '';
+    if (page) page.style.transform = '';
+    foldAt = 1;
     opened = true;
+    // Pictures that arrived during the fold waited for it; this render is theirs too.
+    iconsWaiting = false;
     render();
-  }, Math.round(FLIP_MS / FLIP_STEPS));
+  });
+}
+
+/*
+  GOING BACK PLAYS THE FOLD BACKWARDS, AND THE SURFACE WAITS FOR IT.
+
+  `1 - t^3` is the opening curve read from the other end: reversed, an ease-out IS an ease-in, so the sheet
+  leaves slowly and snaps shut, which is the same movement seen the other way rather than a second effect that
+  merely also takes 300ms.
+
+  The teardown is the C# side's - `picker.back` unmounts the surface and destroys the host - so the page has to
+  be the one that waits. It calls back only after the closed frame has been written AND painted; the extra step
+  is not politeness, the write and the unmount would otherwise land in the same script turn and the last frame
+  of the fold would never reach the screen.
+
+  Escape and right-click arrive as `picker.shut` for the same reason: the mod asks the page to close instead of
+  closing under it, and waits for the answer - see SurfacePicker.RequestClose.
+
+  `picker.shut` carrying "slow" stretches the same fold over eight times as long, and it is not a nicety: a
+  screenshot through this bridge costs about 600ms, so 300ms of movement cannot be photographed at all and
+  "the close animates" would be a claim with no picture under it. `cwshut slow` is how the frames are taken.
+*/
+function shut(how) {
+  if (closing) return;
+  closing = true;
+
+  // The pointer's answer is cancelled, not just ignored: a hover that came due during the fold used to reach
+  // renderSheet and drop a full page rebuild into the middle of it - see hoverCatchUp.
+  if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = 0; }
+  hoverWant = null;
+
+  // "Somebody is here and the fold has started." The mod cannot tell a page that is playing the fold from a
+  // page that never heard the event, and the two want opposite waits - a moment more, or none at all. Said
+  // before the first frame is drawn, because the answer is what the mod times its patience against.
+  s1.call('picker.shutting');
+
+  // From where the sheet is, not from full width: Escape landing in the middle of the opening fold closes the
+  // sheet it can actually see rather than snapping it open first.
+  const from = foldAt;
+  const stepMs = how === 'slow' ? FLIP_STEP_MS * 8 : FLIP_STEP_MS;
+  foldSheet((t) => from * (1 - Math.pow(t, 3)), () => {
+    setTimeout(() => s1.call('picker.back'), stepMs);
+  }, stepMs);
 }
 
 /* ---- wiring ---------------------------------------------------------------------------------------------- */
@@ -1422,15 +1525,60 @@ function findCatchUp() {
   render();
 }
 
-$('back').addEventListener('click', () => s1.call('picker.back'));
+// Wrapped, not passed: a click hands the listener an event object, and shut() reads its argument.
+$('back').addEventListener('click', () => shut());
 
-// The mod says when the underlying list moved - a category registered late, an item unlocked. Reloading the
-// whole view is right here: it is one call and the list is small enough that a diff would cost more to read
-// than it saves.
-s1.on('picker.changed', () => {
-  load();
+// Escape and right-click. The mod holds the exit for the length of the fold rather than tearing the surface
+// down under it - see shut() and SurfacePicker.RequestClose.
+s1.on('picker.shut', shut);
+
+/*
+  LATE PICTURES ARE NOT A REASON TO REBUILD THE PAGE.
+
+  `picker.changed` carries the item ids whose pictures have just arrived. Marking the rows is free - it is the
+  page's own memory, not the document - and only a row that is ON THE SCREEN right now is worth a rebuild:
+  search and the filters live here and the mod cannot see them, so most of what it converts belongs to tiles
+  the player has filtered away.
+
+  An empty payload is any other change the mod has no words for, and keeps the old answer: read the view again
+  and draw it.
+*/
+let iconsWaiting = false;
+
+s1.on('picker.changed', (ids) => {
+  if (closing) return;
+
+  if (!ids) {
+    if (pressed) { iconsWaiting = true; return; }
+    load();
+    render();
+    return;
+  }
+
+  const made = {};
+  ids.split(',').forEach((id) => { if (id) made[id] = true; });
+
+  let touched = false;
+  (view.rows || []).forEach((row) => {
+    if (row.icon === false && made[row.id]) { row.icon = true; touched = true; }
+  });
+  if (!touched) return;
+
+  // The initials are on the screen only for the rows that are showing. Everything else was marked above and
+  // draws its picture the next time a filter or a keystroke rebuilds the page anyway.
+  if (!visible().some((row) => made[row.id])) return;
+
+  // Not while a seed is being pressed, and not into a fold - both are rebuilds landing where they are felt.
+  if (pressed || foldTimer) { iconsWaiting = true; return; }
   render();
 });
+
+/** The deferred rebuild from late pictures, once the press or the fold that held it is over. */
+function iconsCatchUp() {
+  if (!iconsWaiting || pressed || foldTimer || closing) return;
+  iconsWaiting = false;
+  render();
+}
 
 load();
 render();

@@ -60,6 +60,43 @@ namespace Clipwise.UI
         /// picker can stop it.</summary>
         private static object _rest;
 
+        /// <summary>The ceiling on the closing fold - see <see cref="RequestClose"/>. Held so the close it is
+        /// waiting for can stop it.</summary>
+        private static object _shut;
+
+        /// <summary>The page has been asked to fold shut and has not called back yet.</summary>
+        private static bool _closing;
+
+        /// <summary>The page answered <c>picker.shutting</c> - it heard the request and the fold is running.</summary>
+        private static bool _acked;
+
+        /// <summary>
+        /// How long the page gets to say it heard <c>picker.shut</c> at all.
+        ///
+        /// It should not need any of it: an emit runs the page's handler on the spot, on this thread
+        /// (Sideload/Script/Bridge.cs:177-186), so the answer is normally back before <see cref="RequestClose"/>
+        /// returns. The window exists for the page that CANNOT answer - an override folder in Mods\ older than
+        /// this feature, a script that threw while building - and for that page it is the whole delay Escape
+        /// costs, which is why it is two frames and not a second.
+        /// </summary>
+        private const float AckSeconds = 0.2f;
+
+        /// <summary>
+        /// How long the fold itself may take once the page has answered.
+        ///
+        /// Generous on purpose. The fold is 300 ms of wall clock but fourteen script ticks, and a tick is a
+        /// frame - at ten frames a second it takes 1.4s and nothing is wrong. This ceiling is not a timing
+        /// budget; it is there so a page that throws in the middle of the fold still lets go of the screen.
+        /// </summary>
+        private const float FoldSeconds = 2.5f;
+
+        /// <summary>The same ceiling for the slow-motion fold the debug console asks for - eight times as long a
+        /// fold cannot share a ceiling with the real one, or the picture being taken is of this guard firing.</summary>
+        private const float SlowFoldSeconds = 8f;
+
+        /// <summary>Which of the two the fold now running gets. Set by <see cref="RequestClose"/>.</summary>
+        private static float _foldCeiling = FoldSeconds;
+
         /// <summary>The measured spread, in CSS pixels, so the page can lay itself out without having to measure a
         /// viewport it cannot see. Written by <see cref="Fit"/> and sent with the view.</summary>
         private static float _pageW = FallbackWidth;
@@ -121,7 +158,9 @@ namespace Clipwise.UI
                         // The only way out that does not choose something. A surface has no back gesture - right
                         // click and Escape belong to the phone - so without this the picker can be opened and
                         // never left except by picking, which is not a choice the player asked to be given.
-                        .OnCall("picker.back", _ => { Close(); return "ok"; });
+                        .OnCall("picker.back", _ => { Close(); return "ok"; })
+                        // The page saying it heard picker.shut and has started the fold - see RequestClose.
+                        .OnCall("picker.shutting", _ => { _acked = true; return "ok"; });
 
                 if (!Surfaces.IsMounted(SurfaceId)) { Close(); return false; }
 
@@ -316,14 +355,22 @@ namespace Clipwise.UI
         /// Convert the icons the opening frame could not pay for, a few milliseconds per frame, and tell the page
         /// ONCE when they have all arrived.
         ///
-        /// ONE MESSAGE, AT THE END, AND ONLY IF SOMETHING CAME OF IT. `picker.changed` makes the page rebuild
-        /// itself, and a rebuild destroys every tile - which is how #69 stopped clicks being raised at all. One of
-        /// them a second after the clipboard opens is a risk worth the pictures; one per frame is the bug back.
+        /// ONE MESSAGE, AT THE END, AND IT NAMES WHAT ARRIVED. `picker.changed` makes the page rebuild itself,
+        /// and a rebuild destroys every tile - which is how #69 stopped clicks being raised at all: press and
+        /// release land on two different GameObjects and uGUI raises no click at all. One message a second after
+        /// the clipboard opens is a risk worth the pictures; one per frame is the bug back.
+        ///
+        /// "Something came of it" was too broad a reason to send it. This loop walks every row the mod knows
+        /// about, while the search and the filters live in the page - so a player who opens a cold catalogue and
+        /// immediately searches for one cached vanilla seed had every remaining picture made for a tile that is
+        /// not on the screen, and got the one visible tile destroyed and remade for none of them. The ids go with
+        /// the message and the page rebuilds only if one of them is actually on the page.
+        ///
         /// On the second open there is nothing left to convert, so nothing is emitted and nothing rebuilds.
         /// </summary>
         private static System.Collections.IEnumerator Rest()
         {
-            int made = 0;
+            var arrived = new List<string>();
 
             // Never in the frame the picker opened: that frame has already spent its budget, and the page has not
             // drawn once yet.
@@ -332,19 +379,124 @@ namespace Clipwise.UI
             bool more = true;
             while (more && IsOpen && _surface != null && _view != null)
             {
-                made += SurfaceIcons.Supply(_surface, _view, SurfaceIcons.FrameBudgetMs, announce: false, out more);
+                SurfaceIcons.Supply(_surface, _view, SurfaceIcons.FrameBudgetMs, announce: false, out more, arrived);
                 yield return null;
             }
 
             _rest = null;
-            if (made <= 0 || !IsOpen || _surface == null) yield break;
+            if (arrived.Count == 0 || !IsOpen || _surface == null) yield break;
 
-            Core.LogDebug("[Clipwise] icons: " + made + " more made after the open - telling the page.");
-            _surface.Emit("picker.changed");
+            Core.LogDebug("[Clipwise] icons: " + arrived.Count + " more made after the open - telling the page.");
+            AnnounceIcons(string.Join(",", arrived.ToArray()));
+        }
+
+        /// <summary>
+        /// Tell the page that these item ids now have a picture. The page decides what it costs: a row it is not
+        /// showing is marked and nothing is drawn - see the <c>picker.changed</c> listener in app.js.
+        ///
+        /// One method rather than an <c>Emit</c> at each call site, because the debug console drives this too and
+        /// a test that goes down a different road than the coroutine proves the road, not the feature.
+        /// </summary>
+        internal static void AnnounceIcons(string itemIdsCsv)
+        {
+            if (_surface == null || !IsOpen) return;
+            _surface.Emit("picker.changed", itemIdsCsv ?? "");
+        }
+
+        /// <summary>
+        /// Ask the page to fold the sheet shut, and close when it says it is done.
+        ///
+        /// Escape and right-click used to reach <see cref="Close"/> directly, and that is why the picker folded
+        /// open on the way in and simply vanished on the way out. The fold is script on the page - an inline
+        /// write of a paint-only property is the only thing that animates on this surface at all - so the page
+        /// owns the movement and the teardown has to wait for it.
+        ///
+        /// IT WAITS IN TWO STAGES, because "the page is playing the fold" and "the page never heard me" want
+        /// opposite waits and look identical from here. The page answers <c>picker.shutting</c> the moment it
+        /// starts, so silence for <see cref="AckSeconds"/> means nobody is listening and the picker closes at
+        /// once - Escape must never be a key that does nothing. After an answer it gets
+        /// <see cref="FoldSeconds"/>, which is long enough that a bad frame rate is not mistaken for a fault.
+        ///
+        /// The page that cannot answer is not hypothetical: an override folder left in Mods\ shadows the page
+        /// this mod ships and can be any age.
+        /// </summary>
+        /// <param name="how">Empty for the real thing. "slow" stretches the fold so it can be photographed - the
+        /// only way this animation can be looked at at all, since a screenshot costs twice what it lasts.</param>
+        internal static void RequestClose(string how = "")
+        {
+            if (!IsOpen) return;
+
+            // Already folding: pressing Escape again means now.
+            if (_closing || _surface == null) { Close(); return; }
+
+            _closing = true;
+            _acked = false;
+            _foldCeiling = string.Equals(how, "slow", StringComparison.Ordinal) ? SlowFoldSeconds : FoldSeconds;
+
+            try { _surface.Emit("picker.shut", how ?? ""); }
+            catch (Exception e)
+            {
+                Core.Log.Warning("[Clipwise] the picker could not be told to close: " + e.Message);
+                Close();
+                return;
+            }
+
+            _shut = MelonLoader.MelonCoroutines.Start(ShutGuard());
+        }
+
+        /// <summary>The ceiling on the closing fold. Counted in unscaled time with nothing but
+        /// <c>yield return null</c>, so it depends neither on the game's clock nor on a yield instruction the
+        /// IL2CPP support module has to understand.</summary>
+        private static System.Collections.IEnumerator ShutGuard()
+        {
+            float waited = 0f;
+            while (!_acked && waited < AckSeconds)
+            {
+                if (!_closing || !IsOpen) { _shut = null; yield break; }
+                waited += UnityEngine.Time.unscaledDeltaTime;
+                yield return null;
+            }
+
+            if (!_acked)
+            {
+                _shut = null;
+                if (!IsOpen) yield break;
+
+                Core.Log.Warning("[Clipwise] the picker did not answer picker.shut - closing it without the fold."
+                                 + " An override folder in Mods\\clipwise\\ older than this build does that.");
+                Close();
+                yield break;
+            }
+
+            waited = 0f;
+            while (waited < _foldCeiling)
+            {
+                if (!_closing || !IsOpen) { _shut = null; yield break; }
+                waited += UnityEngine.Time.unscaledDeltaTime;
+                yield return null;
+            }
+
+            _shut = null;
+            if (!IsOpen) yield break;
+
+            Core.Log.Warning("[Clipwise] the picker started the closing fold and never finished it ("
+                             + _foldCeiling + "s) - taking it down.");
+            Close();
         }
 
         internal static void Close()
         {
+            _closing = false;
+            _acked = false;
+
+            // Stopped rather than left to run out: it exists only to close a picker that is already gone.
+            if (_shut != null)
+            {
+                try { MelonLoader.MelonCoroutines.Stop(_shut); }
+                catch (Exception e) { Core.Log.Warning("[Clipwise] the close guard would not stop: " + e.Message); }
+                _shut = null;
+            }
+
             // Stopped rather than left to notice: it holds the surface handle, and the next open starts its own.
             if (_rest != null)
             {

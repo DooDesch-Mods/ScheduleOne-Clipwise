@@ -72,8 +72,15 @@ namespace Clipwise.UI
         /// Returns how many pictures this pass added. <paramref name="more"/> says whether anything is still
         /// waiting, which is what lets the caller come back next frame instead of leaving a grid of initials up
         /// until the player closes the clipboard and opens it again.
+        ///
+        /// <paramref name="arrived"/> collects the item ids that got one, and the count alone is not a substitute
+        /// for it: the search and the filters live in the page and this loop walks every row the mod knows
+        /// about, so "some pictures arrived" says nothing about whether any of them has a tile on the screen
+        /// right now. Telling the page WHICH ones lets it rebuild only when the answer is yes - and every
+        /// rebuild it does not do is a click it cannot swallow.
         /// </summary>
-        internal static int Supply(SurfaceHandle surface, View view, int budgetMs, bool announce, out bool more)
+        internal static int Supply(SurfaceHandle surface, View view, int budgetMs, bool announce, out bool more,
+                                   List<string> arrived = null)
         {
             more = false;
             if (view == null || surface == null) return 0;
@@ -124,6 +131,7 @@ namespace Clipwise.UI
 
                 surface.Image(Prefix + row.ItemId, png);
                 _done.Add(row.ItemId);
+                arrived?.Add(row.ItemId);
                 made++;
             }
 

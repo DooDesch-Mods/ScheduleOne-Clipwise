@@ -27,6 +27,8 @@ namespace Clipwise.Debugging
     ///   cwreload      re-read the override files and the user preferences
     ///   cwopen        open the picker on the seed list without a clipboard
     ///   cwboard       open the real clipboard on the nearest pot, and close it again
+    ///   cwshut        leave the picker the way Escape does - the fold, then the surface
+    ///   cwicons       announce late icons by id, the way the icon pass does when it finishes
     ///   cwpng         write the first few converted item icons to disk as PNGs
     ///   cwrect        the clipboard's own rects, so the picker is sized from numbers
     ///   cwtab, cwsearch   both print how to filter the page instead - see Filtering()
@@ -62,7 +64,8 @@ namespace Clipwise.Debugging
             if (cmd != "cwhelp" && cmd != "cwcats" && cmd != "cwdump" && cmd != "cwconflicts"
              && cmd != "cwnamecheck" && cmd != "cwauto" && cmd != "cwreload" && cmd != "cwopen"
              && cmd != "cwtab" && cmd != "cwsearch" && cmd != "cwvanilla" && cmd != "cwrect"
-             && cmd != "cwboard" && cmd != "cwpng" && cmd != "cwfield" && cmd != "cwphone")
+             && cmd != "cwboard" && cmd != "cwpng" && cmd != "cwfield" && cmd != "cwphone"
+             && cmd != "cwshut" && cmd != "cwicons")
                 return false;
 
             // Both SubmitCommand overloads can fire for one submission (the string body calls the list body),
@@ -88,6 +91,8 @@ namespace Clipwise.Debugging
                     case "cwvanilla": Vanilla(); break;
                     case "cwrect": Rects(); break;
                     case "cwboard": Board(); break;
+                    case "cwshut": Shut(parts.Length > 1 ? parts[1] : ""); break;
+                    case "cwicons": Icons(parts.Length > 1 ? parts[1] : ""); break;
                     case "cwphone": Phone(); break;
                     case "cwpng": DumpIcons(); break;
                     case "cwtab":
@@ -111,6 +116,7 @@ namespace Clipwise.Debugging
               + "  cwreload     re-read override files and user preferences\n"
               + "  cwopen       open the picker on the seed list without a clipboard\n"
               + "  cwboard      open the real clipboard on the nearest pot, and close it again\n"
+              + "  cwshut [slow]  leave the picker the way Escape does ('slow' to photograph the fold)\n"
               + "  cwfield      report what the pot's seed field holds, and press it for real\n"
               + "  cwvanilla    the game's own option grid, measured\n"
               + "  cwrect       the rects the picker is placed against\n"
@@ -403,6 +409,48 @@ namespace Clipwise.Debugging
         /// A toggle, because there is no way to send Escape from here - the command that opens it has to be the
         /// command that closes it.
         /// </summary>
+        /// <summary>
+        /// The way out that Escape takes, as a command.
+        ///
+        /// <see cref="Patches.ExitPatch"/> is the only other caller of <see cref="SurfacePicker.RequestClose"/>,
+        /// and a key press is the one thing the tooling here cannot make - so without this the closing fold
+        /// could only ever be tested by hand, which is the state the opening one shipped in.
+        /// </summary>
+        private static void Shut(string how)
+        {
+            if (!SurfacePicker.IsOpen)
+            {
+                Complain("Clipwise: the picker is not open - cwboard, then cwfield.");
+                return;
+            }
+
+            bool slow = string.Equals(how, "slow", StringComparison.OrdinalIgnoreCase);
+            SurfacePicker.RequestClose(slow ? "slow" : "");
+            Say(slow
+                ? "Clipwise: folding shut over about 2.4s - long enough to photograph. Shoot now."
+                : "Clipwise: asked the picker to fold shut. It closes itself when the fold lands. 'cwshut slow' to watch it.");
+        }
+
+        /// <summary>
+        /// The message the icon pass sends when it finishes, on demand.
+        ///
+        /// The pass itself only speaks when a picture arrives AFTER the opening frame, and on a small save every
+        /// icon is made inside the opening budget - so the path that rebuilds the page under a player's finger
+        /// cannot be reached at all on the machine it is being tested on. This reaches it, with ids of choosing.
+        /// </summary>
+        private static void Icons(string ids)
+        {
+            if (!SurfacePicker.IsOpen)
+            {
+                Complain("Clipwise: the picker is not open - cwboard, then cwfield.");
+                return;
+            }
+
+            SurfacePicker.AnnounceIcons(ids);
+            Say("Clipwise: told the page about '" + (string.IsNullOrEmpty(ids) ? "(nothing named - a full reload)" : ids)
+                + "'. It rebuilds only if one of them is on the page.");
+        }
+
         private static void Board()
         {
             var clipboard = Singleton<ManagementClipboard>.Instance;
