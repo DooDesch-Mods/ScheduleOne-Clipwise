@@ -33,7 +33,15 @@ namespace Clipwise.UI
         /// from being done twice, which matters because a clipboard is opened over and over.</summary>
         private static readonly HashSet<string> _done = new HashSet<string>(StringComparer.Ordinal);
 
-        /// <summary>Ids whose icon could not be produced, so a broken one is attempted once and not every open.</summary>
+        /// <summary>
+        /// Ids whose icon could not be CONVERTED, so a broken sprite is attempted once and not every open.
+        ///
+        /// AN ITEM WITH NO SPRITE AT ALL IS NOT IN HERE, and that distinction is the whole of "ten of nineteen
+        /// tiles are empty boxes". A strain catalogue registers its items long before it materialises them, so at
+        /// the first open a bred seed's definition has no icon yet - and blacklisting it there meant the tile
+        /// stayed blank for the rest of the process even once the mod had dressed it. A missing sprite is a
+        /// "not yet"; a sprite that will not encode is a "no".
+        /// </summary>
         private static readonly HashSet<string> _failed = new HashSet<string>(StringComparer.Ordinal);
 
         /// <summary>Longest this may spend in one open. A picker that takes half a second to appear is a worse
@@ -45,7 +53,7 @@ namespace Clipwise.UI
             if (view == null || surface == null) return;
 
             var watch = Stopwatch.StartNew();
-            int made = 0, skipped = 0;
+            int made = 0, skipped = 0, bare = 0;
 
             foreach (Row row in view.Rows)
             {
@@ -63,7 +71,18 @@ namespace Clipwise.UI
                 // picture, 684 strains, reported as exactly that.
                 Sprite icon = row.Item != null ? row.Item.Icon : null;
                 if (icon == null) icon = row.Facts?.Icon;
-                if (icon == null) { _failed.Add(row.ItemId); continue; }
+
+                // NOT BLACKLISTED - see `_failed`. The next open asks again, which is what lets a strain that was
+                // only registered when this picker first opened arrive with its own vial the second time.
+                if (icon == null)
+                {
+                    bare++;
+                    if (bare <= 3)
+                        Core.LogDebug("[Clipwise] no icon yet for " + row.ItemId
+                                      + " (definition " + (row.Item != null ? "present" : "null")
+                                      + ", cached facts " + (row.Facts != null ? "present" : "null") + ").");
+                    continue;
+                }
 
                 // The first few, with the numbers that decide whether a tile can look like itself: a tester
                 // reported every vial in the grid drawn identically, and the two candidates - every item
@@ -82,11 +101,20 @@ namespace Clipwise.UI
                 made++;
             }
 
-            if (made > 0 || skipped > 0)
-                Core.LogDebug("[Clipwise] icons: " + made + " made in " + watch.ElapsedMilliseconds + "ms"
-                              + (skipped > 0 ? ", " + skipped + " left for the next open" : "")
-                              + (_failed.Count > 0 ? ", " + _failed.Count + " without one" : ""));
+            // ALWAYS SAID, INCLUDING THE ALL-ZERO CASE. The old line was printed only when something HAPPENED, so
+            // an open where every remaining row had no sprite yet logged nothing at all - and a grid of empty
+            // tiles with a silent log reads as a page that never asked for its pictures.
+            Core.LogDebug("[Clipwise] icons: " + made + " made in " + watch.ElapsedMilliseconds + "ms"
+                          + ", " + _done.Count + " ready"
+                          + (bare > 0 ? ", " + bare + " with no sprite yet" : "")
+                          + (skipped > 0 ? ", " + skipped + " left for the next open" : "")
+                          + (_failed.Count > 0 ? ", " + _failed.Count + " that will not convert" : ""));
         }
+
+        /// <summary>Whether this item's picture is in the store, so the page can draw a letter instead of an empty
+        /// box. Answered before the page builds - <see cref="Supply"/> runs between the mount and the first
+        /// render, so a row's answer is already true or already false by the time it is asked for.</summary>
+        internal static bool Has(string itemId) => !string.IsNullOrEmpty(itemId) && _done.Contains(itemId);
 
         /// <summary>
         /// One sprite as PNG bytes, or null.
