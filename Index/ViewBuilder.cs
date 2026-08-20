@@ -33,6 +33,9 @@ namespace Clipwise.Index
         public readonly List<string> Tags = new();
         public Row NoneRow;
         public string Title = "";
+        /// <summary>The thing the field belongs to - the station's own name, "Pot 3". Empty when the click could
+        /// not be traced to exactly one station, which is the case whenever several are selected at once.</summary>
+        public string Owner = "";
     }
 
     /// <summary>

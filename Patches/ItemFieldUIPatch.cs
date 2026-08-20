@@ -57,6 +57,7 @@ namespace Clipwise.Patches
                     : "Select";
 
                 View view = ViewBuilder.Build(title, snapshot, selected, first.CanSelectNone, noneLabel);
+                view.Owner = OwnerName(fields);
 
                 // Keep a managed copy of the target fields: writing back has to hit every selected object, exactly
                 // as vanilla's own handler does.
@@ -119,6 +120,41 @@ namespace Clipwise.Patches
             for (int i = 0; i < fields.Count - 1; i++)
                 if (fields[i].SelectedItem != fields[i + 1].SelectedItem) return false;
             return true;
+        }
+
+        /// <summary>
+        /// The thing the field belongs to, named as its own configuration names it: "Pot 3", or whatever the
+        /// player renamed it to. The picker prints this rather than the field's label, because the label says
+        /// what KIND of thing is being chosen - which the player can see, they are looking at a page of seeds -
+        /// and never which of the four pots on the clipboard this page is about.
+        ///
+        /// Empty when the fields do not agree on one name. Several stations can be configured at once, and
+        /// "POT 3 IS SET TO" over four pots would be a straight lie; the page falls back to the field label.
+        /// </summary>
+        private static string OwnerName(Il2CppSystem.Collections.Generic.List<ItemField> fields)
+        {
+            try
+            {
+                string name = null;
+                for (int i = 0; i < fields.Count; i++)
+                {
+                    ItemField field = fields[i];
+                    if (field == null) return "";
+
+                    EntityConfiguration config = field.ParentConfig;
+                    string one = config != null && config.Name != null ? config.Name.Value : null;
+                    if (string.IsNullOrWhiteSpace(one)) return "";
+
+                    if (name == null) name = one;
+                    else if (!string.Equals(name, one, StringComparison.Ordinal)) return "";
+                }
+                return name ?? "";
+            }
+            catch
+            {
+                // A name is decoration on one line of the record; the picker opens without it.
+                return "";
+            }
         }
 
         /// <summary>The root canvas the clipboard renders on, so the picker sits above it and inherits its scaling.</summary>

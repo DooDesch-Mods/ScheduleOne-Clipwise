@@ -44,14 +44,15 @@
       <span class="head-count" id="count"></span>
     </div>
 
-    <div class="rule"></div>
-
     <!-- WRITTEN ON A RULED LINE, not in a box: this is a pad, and the search is the line at the top of it.
+         Its baseline rule is also the ONLY rule under the head - a second one above it drew two heavy strokes
+         eight pixels apart, which is a form with a mistake on it rather than a pad.
+
          No data-typing. The field keeps the caret whenever nothing else holds one, and a caret in a field is
          what stops the GAME seeing keys at all - including the Escape that closes this page. Click to type. -->
     <div class="find-line">
       <span class="find-label">Search</span>
-      <input class="find" id="find" maxlength="40">
+      <input class="find" id="find" maxlength="40" placeholder="name, effect, cross...">
     </div>
 
     <div class="chips" id="chips"></div>
