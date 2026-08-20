@@ -624,13 +624,13 @@ body {
      nothing hovered. `display: none` is the only hiding that is certain here, and an absolute box costs no
      layout either way. */
   display: none;
-  opacity: 0;
-  transition: opacity 110ms;
 }
 
-/* Two steps, because the fade needs a frame where the label exists and is still transparent. */
+/* NO FADE, because there was never one to see. A class change rebuilds the page rather than repainting a box,
+   and the transition runner is cleared at the top of every rebuild - it is only ever driven from the repaint
+   path a `:hover` rule takes. The declared `transition: opacity` therefore drew nothing and the second class
+   write that existed to start it cost a whole extra rebuild of the page. */
 .tip.up { display: flex; }
-.tip.up.on { opacity: 1; }
 
 /* ONE LINE, NOT TWO: the name and the tier stand side by side on the slip, which is what makes it a label
    rather than a small card. The default flex direction here is column, so a row has to say so. */

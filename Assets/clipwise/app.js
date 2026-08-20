@@ -310,6 +310,8 @@ function renderChips() {
       sort = 0;
       query = '';
       $('find').value = '';
+      // A keystroke waiting for its render would otherwise land after this one and type the query back in.
+      findWant = null;
       remember();
     });
   }
@@ -479,20 +481,139 @@ let shownAt = 0;
 /** Handed to every tile as it is built - see `shownAt`. Reset per render, so the numbers are the positions. */
 let slots = 0;
 
+/*
+  WHERE EACH TILE'S LABEL IS, BY SLOT: the node itself and the two numbers that place it.
+
+  A HOVER MUST NOT REBUILD THE CATALOGUE. Two things change when the pointer moves to another tile - the record
+  on the facing sheet and which line's label carries a word - and both are writes to nodes that already exist.
+  Reaching them through `render()` meant `renderRows` opened with `replaceChildren`, so every tile on the page
+  was thrown away and made again: a tile is five nodes, a starred seed is drawn twice, and several hundred seeds
+  therefore cost a few thousand nodes rebuilt per tile crossed. This is the handle that makes the write
+  targeted. Filled as the grid is built, thrown away with the grid.
+*/
+let tipAt = [];
+
+/* Which slot's label carries the `up` class right now - on screen, or scaled away by hideTip and still up. Not
+   the same question as `shownAt`: leaving the grid takes the slip off the screen and leaves the class where it
+   was, and something has to know which node to put back. Reset with the grid, which hands out fresh nodes. */
+let slipAt = 0;
+
 /** The Any tile has no row of its own, so it points at this. Compared by identity, never by id. */
 const ANY = { id: ' any', name: 'Any' };
 
-/* Which tile's label has already faded up. See `fillTip` - it is what stops the fade restarting itself. */
-let faded = 0;
+/** A class write that is skipped when it would change nothing: every write to the document rebuilds the page,
+    so a write that says what the node already says costs a whole rebuild for no change at all. */
+function setClass(node, name) {
+  if (node && node.className !== name) node.className = name;
+}
+
+/*
+  THE POINTER OUTRUNS THE PAGE, AND IT IS ALLOWED TO.
+
+  A write to the document does not repaint a box here - it rebuilds the whole page on the mod's side, every
+  GameObject destroyed and made again. Measured on a catalogue of five hundred seeds: about a second, and the
+  pointer crosses five tiles in that second. Answering each one in turn meant five seconds of frozen screen for
+  a flick of the wrist, and the four records in the middle were never on screen long enough to be read.
+
+  So the pointer's position is remembered and the sheet catches up once, a fraction of a second later. A sweep
+  across the grid costs ONE rebuild instead of one per tile, and the only thing given up is that the record
+  arrives a tenth of a second after the pointer does - which is what a tooltip does everywhere else.
+*/
+const HOVER_MS = 90;
+let hoverTimer = 0;
+let hoverWant = null;
 
 function showRecord(row, slot) {
   const at = slot || 0;
-  if (shown === row && shownAt === at) return;
-  if (shown && row && shown.id === row.id && shownAt === at) return;
-  shown = row;
-  shownAt = at;
-  faded = 0;
-  render();
+  const same = (shown === row || (shown && row && shown.id === row.id)) && shownAt === at;
+  if (same) {
+    // A leave is raised before the enter that follows it, so crossing from the picture onto the star of the same
+    // tile queues a "gone" and then arrives back at the tile it never really left. Take the queued one back.
+    if (hoverWant && hoverWant.gone) hoverWant = null;
+    return;
+  }
+
+  // The LAST tile the pointer was on wins. Nothing is written here at all - see hoverCatchUp.
+  hoverWant = { row: row, slot: at, gone: false };
+  if (!hoverTimer) hoverTimer = setTimeout(hoverCatchUp, HOVER_MS);
+}
+
+/*
+  THE POINTER LEFT A TILE WITHOUT ARRIVING AT ANOTHER ONE.
+
+  The slip belongs to the pointer and goes with it; the record on the facing sheet stays, because that sheet is
+  the memory of what was last pointed at and saying the same name twice on one screen is what made the slip look
+  stuck.
+
+  Queued through the same timer as an enter, not done on the spot: uGUI raises the leave of the old tile and the
+  enter of the new one in the same frame, so a hide that wrote at once would cost one paint on the way out and
+  another on the way in for every tile crossed. Both land in `hoverWant` and only the last one is paid for.
+
+  NO LEAVE ARRIVES FOR A DESTROYED TILE (Sideload/Input/Interaction.cs:117-119), which is what makes this safe
+  against the rebuild every write causes: the tile the pointer is on is destroyed and remade constantly, and not
+  one of those raises a spurious leave.
+*/
+function leaveRecord(slot) {
+  const at = slot || 0;
+  if (hoverWant) { if (hoverWant.slot !== at) return; }
+  else if (shownAt !== at) return;
+
+  hoverWant = { row: shown, slot: at, gone: true };
+  if (!hoverTimer) hoverTimer = setTimeout(hoverCatchUp, HOVER_MS);
+}
+
+function hoverCatchUp() {
+  hoverTimer = 0;
+
+  const want = hoverWant;
+  hoverWant = null;
+  if (!want) return;
+
+  if (want.gone) {
+    // The record is left exactly as it is - see leaveRecord.
+    hideTip(shownAt);
+    shownAt = 0;
+    return;
+  }
+
+  if (shown === want.row && shownAt === want.slot) return;
+
+  // Coming back to the tile that is already on the sheet - off the picture onto the star and back, or onto the
+  // paper and back - leaves the record saying what it already says. Rebuilding it to write the same words is a
+  // whole page rebuilt for nothing.
+  const changed = shown !== want.row;
+  shown = want.row;
+  shownAt = want.slot;
+  hoverPaint(changed);
+}
+
+/*
+  THE HOVER'S OWN PAINT, AND IT NEVER TOUCHES THE LIST.
+
+  The label the pointer left goes back to its resting class, the label it arrived at is filled, and the facing
+  sheet is redrawn. The grid, the chip row, the dock and the head are left exactly as they are, because nothing
+  on any of them says which tile the pointer is on.
+
+  One rebuild still happens on the mod's side - a label that goes from `display: none` to a slip is a layout
+  change and there is no cheaper answer to that. What this removes is the SECOND cost, which was building the
+  whole catalogue again in script to reach two nodes.
+*/
+function hoverPaint(record) {
+  // `slipAt`, not the tile just left: the pointer may have gone off the grid in between, and that takes the slip
+  // off the screen without giving its node the resting class back - see hideTip.
+  if (slipAt && slipAt !== shownAt) {
+    const before = tipAt[slipAt];
+    if (before) setClass(before.node, 'tip');
+    slipAt = 0;
+  }
+
+  const now = tipAt[shownAt];
+  if (now && view.tips !== false && shown && shown !== ANY) {
+    fillTip(now.node, shown, now.col, now.indent);
+    slipAt = shownAt;
+  }
+
+  if (record) renderSheet();
 }
 
 /** One "LABEL value" line, and only when there is a value. A record that promises a field and shows nothing
@@ -826,13 +947,16 @@ function tipNode() {
 /*
   TEXT AND OFFSETS ON NODES THAT ARE ALREADY THERE. Nothing is created and nothing is removed.
 
-  THE FADE IS THE ONE WRITE THAT IS NOT PART OF A RENDER, and it is bounded on purpose. A transition needs the
-  SAME element to change, so a rebuild cannot carry one - the class has to be set on the node that is already
-  there. `faded` is what makes that safe: if the class change does rebuild the page, the label comes back
-  already lit and schedules nothing, so the worst case is one extra rebuild and a fade that is cut short, never
-  a loop.
+  ONE CLASS WRITE, NOT TWO, AND THERE IS NO FADE.
+
+  The label used to go up in two steps - `up` to give it a box, then `on` a tick later to take it from
+  transparent to opaque, so that the declared `transition: opacity` had a frame to run from. It never ran. A
+  class change is not a repaint on this surface: it rebuilds the page, the transition runner is cleared at the
+  top of every rebuild and only ever driven from the repaint path a `:hover` rule takes. So the second write
+  bought no animation at all and cost a second full rebuild of the page - at five hundred seeds, another
+  second of frozen screen for every tile the pointer touched.
 */
-function fillTip(node, row, col, indent, slot) {
+function fillTip(node, row, col, indent) {
   if (!node) return;
 
   const name = row.name || row.id;
@@ -849,18 +973,25 @@ function fillTip(node, row, col, indent, slot) {
   node.style.width = width + 'px';
   node.style.left = (flip ? tipX(col) - width - TIP_GAP : tipX(col) + TILE + TIP_GAP) + 'px';
 
-  // `up` is what makes the label exist at all; `on` is what fades it in. Both are class writes on a node that
-  // is already there - see tipNode.
-  const base = 'tip up' + (flip ? ' flip' : '');
-  const lit = faded === slot;
-  node.className = base + (lit ? ' on' : '');
-  if (lit) return;
+  // `up` is what makes the label exist at all - a class write on a node that is already there, see tipNode.
+  // The transform is what a previous hide left behind - see hideTip.
+  node.style.transform = '';
+  setClass(node, 'tip up' + (flip ? ' flip' : ''));
+}
 
-  setTimeout(() => {
-    if (shownAt !== slot || faded === slot) return;
-    faded = slot;
-    node.className = base + ' on';
-  }, 0);
+/*
+  TAKE THE SLIP AWAY WITHOUT REBUILDING THE PAGE.
+
+  `display` is the obvious answer and the wrong one here: it is layout, so a class write costs the whole page
+  destroyed and made again - a second of it on a catalogue of several hundred, spent on a label going away.
+
+  A transform is the one write this engine answers with a repaint of the single box that was written
+  (Sideload/Css/PaintOnlyProperties.cs), which is what the sheet's opening fold is animated with. Scaled to
+  nothing the slip has no width and draws nothing, and `fillTip` clears it again on the way back up.
+*/
+function hideTip(slot) {
+  const at = tipAt[slot];
+  if (at && at.node) at.node.style.transform = 'scaleX(0)';
 }
 
 /** Square, at whatever size the sheet allowed this render. The picture is inset by the same six pixels the
@@ -902,10 +1033,16 @@ function tileNode(row, slot) {
   pick.addEventListener('click', () => s1.call('picker.pick', row.id));
   // The TILE, not the seed: a favourite is on the page twice and only one of them is under the pointer.
   pick.addEventListener('mouseenter', () => showRecord(row, slot));
+  // The slip goes when the pointer does - see leaveRecord.
+  pick.addEventListener('mouseleave', () => leaveRecord(slot));
   tile.appendChild(pick);
 
   const star = el('button', 'star' + (row.fav ? ' on' : ''));
   star.appendChild(img('star-img', 'star.png'));
+  // The star stands ON the tile, so drifting five pixels onto it has not left the seed - it says so itself
+  // rather than letting the picture's own leave take the slip away.
+  star.addEventListener('mouseenter', () => showRecord(row, slot));
+  star.addEventListener('mouseleave', () => leaveRecord(slot));
   star.addEventListener('click', () => {
     row.fav = s1.call('picker.fav', row.id) === 'on';
     render();
@@ -961,9 +1098,15 @@ function grid(box, rows, indent) {
     const slot = ++slots;
     line.appendChild(tileNode(row, slot));
 
+    // Where this tile's label is and how it is placed, so a hover can fill it without the grid being rebuilt to
+    // find it - see `tipAt`.
+    tipAt[slot] = { node: tip, col: col, indent: indent };
+
     // The line's own label, filled only for the TILE the pointer is on.
-    if (view.tips !== false && shown && shown !== ANY && shown.id === row.id && shownAt === slot)
-      fillTip(tip, row, col, indent, slot);
+    if (view.tips !== false && shown && shown !== ANY && shown.id === row.id && shownAt === slot) {
+      fillTip(tip, row, col, indent);
+      slipAt = slot;
+    }
     col++;
   }
 
@@ -1100,6 +1243,8 @@ function renderRows(rows) {
   // The tile numbers are positions in THIS render - see `shownAt`. Reset here, before the first tile is made,
   // so the same list hands the same tile the same number every time it is rebuilt.
   slots = 0;
+  tipAt = [];
+  slipAt = 0;
 
   pendingLead = view.none ? anyTile() : null;
 
@@ -1245,10 +1390,37 @@ function flip() {
 
 /* ---- wiring ---------------------------------------------------------------------------------------------- */
 
+/*
+  ONE RENDER PER BURST OF TYPING, NOT ONE PER LETTER.
+
+  Narrowing seven hundred seeds down to twelve is five keystrokes, and every one of them used to rebuild the
+  whole page - including the four on the way there, which nobody was reading. The letter that matters is the
+  last one typed, so the render is held back until the typing stops for a moment and then run once, against
+  whatever the field says by then.
+
+  Held rather than restarted: a timer that is pushed back on every keystroke never fires while somebody types
+  quickly, and a search box that shows nothing until the hands come off the keyboard is worse than a slow one.
+  This one guarantees a render every FIND_MS however fast the typing is.
+*/
+const FIND_MS = 140;
+let findTimer = 0;
+let findWant = null;
+
 $('find').addEventListener('input', (e) => {
-  query = e.value || '';
-  render();
+  findWant = e.value || '';
+  if (!findTimer) findTimer = setTimeout(findCatchUp, FIND_MS);
 });
+
+function findCatchUp() {
+  findTimer = 0;
+
+  const q = findWant;
+  findWant = null;
+  if (q === null || q === query) return;
+
+  query = q;
+  render();
+}
 
 $('back').addEventListener('click', () => s1.call('picker.back'));
 
