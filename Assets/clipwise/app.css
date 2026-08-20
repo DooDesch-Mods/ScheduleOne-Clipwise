@@ -1,12 +1,21 @@
 /*
-  The vanilla clipboard's own seed page, with a search box and a filter added to it.
+  A PAD ON VANILLA'S CLIPBOARD: the top sheet, and the next sheet hanging off its perforated edge.
 
-  COLOURS ARE VANILLA'S, not this mod's. The card is the game's light paper grey, the type is near-black and
-  nothing is tinted. A dark picker floating on a wooden board reads as a different game, and the whole point of
-  #69 is that this page should look like the one it replaces.
+  COLOURS ARE VANILLA'S, not this mod's. The paper is the game's light grey, the ink is near-black and nothing
+  is tinted. A wooden board with cream paper and coloured tabs on it reads as a different game; the reference
+  for how this sits is the clipboard the player already has in their hands.
 
-  Sideload's CSS is a subset: no z-index, no hsl(), px and % only. Every box is a flex container and the DEFAULT
-  direction is COLUMN, so a row has to say so.
+  BOTH PAGES ARE THE SAME SHEET - same grey, same padding, same rule, same size. That is the whole idea: the
+  second page is not a panel beside the card, it is the next page of the pad, folded out over the desk.
+
+  Sideload's CSS is a subset: no z-index (paint order is document order), no hsl(), px and % only, and a
+  `linear-gradient` takes exactly two stops. Every box is a flex container and the DEFAULT direction is COLUMN,
+  so a row has to say so. `transform` exists on the paint-only list, which is what the opening effect is built
+  out of.
+
+  TWO FACES, AND BOTH ARE THE GAME'S OWN. `game-hand` is the clipboard's handwriting (Caveat) and carries
+  everything a person would have written on the pad: Back, the title, the section heads, names, the big
+  numbers. `game-ui` is Open Sans and carries everything printed ON the pad: labels, counts, facts.
 */
 
 body {
@@ -17,15 +26,126 @@ body {
   color: #23262b;
 }
 
-.card {
+/* ---- the pad --------------------------------------------------------------------------------------------- */
+
+.pad {
   height: 100%;
-  padding: 18px 20px 16px 20px;
-  background: #d7d9dc;
+  flex-direction: row;
+  align-items: stretch;
 }
 
-/* ---- head ------------------------------------------------------------------------------------------------ */
+/* Widths come from the mod. `flex: none` so neither page is stretched or squeezed to fill the host - the left
+   one has to stay exactly the size of vanilla's card, because that is where it is drawn. */
+.page {
+  flex: none;
+  height: 100%;
+  min-height: 0;
+  background: #d7d9dc;
+  overflow: hidden;
+}
+
+/* The right padding clears the fold and the perforation; the bottom clears the stack of sheets underneath. */
+.page.left { padding: 18px 26px 14px 20px; }
+
+/* The left padding clears the other half of the crease. */
+.page.right { padding: 18px 20px 14px 38px; }
+
+/*
+  THE OPENING EFFECT, AND WHY IT IS A SCALE RATHER THAN A ROTATION.
+
+  `transform` is on the paint-only list, so writing it from script repaints ONE box instead of rebuilding the
+  page. What the engine does not have is `@keyframes` or a third dimension, so a real rotateY is out.
+
+  What is left is the flat approximation, and on a pad it is the right one anyway: the second sheet starts
+  folded onto the crease (`scaleX(0)`) and opens out over the desk. The top sheet never moves, because a
+  transform runs after layout and can never push a sibling around.
+*/
+.page.right { transform-origin: left center; }
+
+/* THE CLASS IS ON THE PAGE, NEVER ON AN ANCESTOR. `.pad.shut .page.right` does nothing at all here -
+   measured: the ancestor carried `shut`, the page stayed full width, and an inline `scaleX(0.35)` on the same
+   element folded it on the spot. A two-class compound on the element itself is fine; it is the DESCENDANT
+   combinator that does not arrive. */
+.page.right.shut { transform: scaleX(0); }
+
+/* ---- the fold, the perforation and the stack --------------------------------------------------------------- */
+
+/* Into the crease on the top sheet, and out of it on the one below. Two stops, because two is all a gradient
+   gets here. */
+.fold-l {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 20px;
+  height: 100%;
+  background: linear-gradient(90deg, #d7d9dc, #c3c6cb);
+}
+
+.fold-r {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 30px;
+  height: 100%;
+  background: linear-gradient(90deg, #c3c6cb, #d7d9dc);
+}
+
+/* Punched through the fold. Sixteen and not sixty: every hole is a box that is rebuilt with the page, and the
+   spacing reads as a perforation long before it reads as a row of dots. */
+.perf {
+  position: absolute;
+  top: 0;
+  right: 5px;
+  width: 5px;
+  height: 100%;
+  padding: 14px 0;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.hole {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 3px;
+  background: #c0c3c8;
+}
+
+/* The sheets under the top one, seen along the bottom edge. Each is stepped in from the left, the way a pad
+   sits when the sheets are not quite square on each other. They run past the right edge and are clipped by the
+   page's own `overflow: hidden`, which is what keeps them out of the fold. */
+.stack-b {
+  position: absolute;
+  left: 7px;
+  bottom: 0;
+  width: 100%;
+  height: 3px;
+  background: #bfc3c8;
+}
+
+.stack-a {
+  position: absolute;
+  left: 3px;
+  bottom: 3px;
+  width: 100%;
+  height: 3px;
+  background: #c9ccd1;
+}
+
+/* The top sheet's own bottom edge, over the stack. */
+.stack-edge {
+  position: absolute;
+  left: 0;
+  bottom: 6px;
+  width: 100%;
+  height: 1px;
+  background: #bdc1c6;
+}
+
+/* ---- head -------------------------------------------------------------------------------------------- */
 
 .head {
+  flex: none;
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
@@ -35,82 +155,111 @@ body {
 .back {
   width: 92px;
   height: 26px;
-  font-size: 17px;
-  font-weight: 700;
+  font-family: game-hand;
+  font-size: 21px;
   color: #23262b;
   background: transparent;
   align-items: center;
+  white-space: nowrap;
 }
 
 .back:hover { color: #5a5f68; }
 
 .head-title {
-  font-size: 19px;
-  font-weight: 700;
+  flex: 1;
+  min-width: 0;
+  font-family: game-hand;
+  font-size: 26px;
   text-align: center;
+  white-space: nowrap;
 }
 
-/* Balances the Back button so the title sits in the middle of the card rather than the middle of what is left. */
+/* Balances the Back button so the title sits in the middle of the sheet rather than the middle of what is left. */
 .head-count {
   width: 92px;
-  font-size: 12px;
-  color: #6b7079;
+  font-size: 11px;
+  color: #8b9098;
   text-align: right;
   align-items: center;
 }
 
 /* Vanilla draws a hand-inked stroke here rather than a border. A 2px rule is the closest the subset gets; the
-   real one is a sprite and would have to be shipped as a PNG. */
+   real one is a sprite and would have to be shipped as a PNG the way star.png is. Not a glyph - the game's
+   font atlases carry Latin text and nothing that could draw a stroke. */
 .rule {
+  flex: none;
   height: 2px;
-  margin: 8px 0 12px 0;
+  margin: 6px 0 10px 0;
   background: #3a3d42;
 }
 
-/* ---- search and filter ----------------------------------------------------------------------------------- */
+/* ---- the search line --------------------------------------------------------------------------------------- */
+
+/* A written line on the pad, not a control dropped onto it: the word, then the query on a baseline rule. */
+.find-line {
+  flex: none;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  margin: 0 0 8px 0;
+}
+
+.find-label {
+  flex: none;
+  font-family: game-hand;
+  font-size: 19px;
+  color: #5b6068;
+  white-space: nowrap;
+}
 
 .find {
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid #a9adb4;
-  border-radius: 4px;
-  background: #e9eaec;
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 2px;
+  /* The baseline rule, and it has to be the shorthand: a bare `border-color` with a width on one edge leaves
+     the border STYLE unset, and nothing is drawn at all. One colour per box either way - four border colours
+     do not exist here. */
+  border-bottom: 1.6px solid #3a3d42;
+  background: transparent;
   color: #23262b;
+  font-size: 13px;
   align-items: center;
 }
 
-/* The filter bar scrolls sideways rather than running off the card. There are nine chips at most and no
-   wrapping in this engine, so the alternative is the last two hanging over the edge - which is what happened. */
-/* A COLUMN of rows, and the script decides where each row ends - there is no flex-wrap in this engine, and
-   a single scrolling row hid the last chip behind the edge of the clipboard with nothing to say it was there. */
+/* ---- the filter chips ------------------------------------------------------------------------------------ */
+
+/* A COLUMN of rows, and the script decides where each row ends - there is no flex-wrap in this engine, and a
+   single scrolling row hid the last chip behind the edge of the clipboard with nothing to say it was there. */
 .chips {
+  flex: none;
   gap: 4px;
-  margin: 10px 0 8px 0;
+  margin: 0 0 8px 0;
 }
 
 .chip-row {
   flex-direction: row;
   align-items: center;
   gap: 6px;
-  height: 26px;
-  min-height: 26px;
+  height: 24px;
+  min-height: 24px;
 }
 
 .chip {
-  height: 24px;
+  height: 22px;
   /* Never squeezed to fit the bar: a chip narrower than its word is a chip with half a word in it. */
   flex-shrink: 0;
   padding: 0 10px;
-  /* The same slate the selected tile and an active chip already use, so the bar reads as one family of
-     controls rather than a light row above a dark one. */
   border: 1px solid #3a3d42;
-  border-radius: 12px;
+  border-radius: 11px;
   background: #e9eaec;
   color: #4a4f57;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   text-align: center;
   align-items: center;
+  white-space: nowrap;
 }
 
 .chip:hover { background: #f2f3f4; }
@@ -119,58 +268,6 @@ body {
   background: #3a3d42;
   border: 1px solid #3a3d42;
   color: #f2f3f4;
-}
-
-/* ---- the open drop-down ------------------------------------------------------------------------------- */
-
-/* Under the bar, never over the grid: a list that covers what it filters has to be dismissed before the
-   result can be seen. Capped and scrolling, because a mod may declare thirty effects. */
-.drop {
-  max-height: 108px;
-  overflow: auto;
-  margin-bottom: 8px;
-  padding: 4px;
-  border: 1px solid #a9adb4;
-  border-radius: 4px;
-  background: #e9eaec;
-}
-
-.drop.closed { display: none; }
-
-.tick {
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
-  height: 22px;
-  padding: 0 4px;
-  background: transparent;
-  color: #4a4f57;
-  font-size: 12px;
-  text-align: left;
-}
-
-.tick:hover { background: #f2f3f4; }
-
-.tick-box {
-  width: 13px;
-  height: 13px;
-  border: 1px solid #8b9098;
-  border-radius: 2px;
-  background: #f7f8f9;
-  color: #23262b;
-  font-size: 10px;
-  font-weight: 700;
-  text-align: center;
-  align-items: center;
-}
-
-.tick.on .tick-box { background: #3a3d42; color: #f2f3f4; }
-
-.tick-name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* ---- the list -------------------------------------------------------------------------------------------- */
@@ -182,20 +279,93 @@ body {
   overflow: auto;
 }
 
+/* A section head: the name in the hand, then the two ordering controls, then the count. */
 .section {
-  padding: 8px 2px 4px 2px;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 2px 2px 2px;
+}
+
+.section-name {
+  flex: none;
+  font-family: game-hand;
+  font-size: 21px;
+  color: #23262b;
+  white-space: nowrap;
+}
+
+.section-fill {
+  flex: 1;
+  min-width: 0;
+  height: 1px;
+  background: #bdc1c6;
+}
+
+.section-count {
+  flex: none;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: #8b9098;
+  white-space: nowrap;
+}
+
+/* The two second-level controls. Small, printed rather than written, and off to the side: they order what is
+   under the heading and are not part of it. */
+.knob {
+  flex: none;
+  height: 18px;
+  padding: 0 7px;
+  border: 1px solid #bdc1c6;
+  border-radius: 9px;
+  background: #e9eaec;
+  color: #5b6068;
+  font-size: 10px;
+  font-weight: 600;
+  text-align: center;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.knob:hover { background: #f2f3f4; }
+
+.knob.on {
+  border: 1px solid #8b9098;
+  background: #e0e2e5;
+  color: #23262b;
+}
+
+/* A tier inside a mod's own section: indented under it, with a rule carrying the count to the edge. */
+.tier {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 2px 2px 14px;
+}
+
+.tier-name {
+  flex: none;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 1px;
-  color: #4a4f57;
+  color: #8b9098;
+  white-space: nowrap;
 }
 
-/* A tier inside the mod's own section. Indented and lighter, so it reads as a division of the heading
-   above it rather than another heading of the same rank. */
-.section.sub {
-  padding: 6px 2px 2px 14px;
+/* The sub-rule is lighter than the section's own, so the tier reads as a division of the heading above it
+   rather than another heading of the same rank. */
+.tier-fill {
+  flex: 1;
+  min-width: 0;
+  height: 1px;
+  background: #b6bac0;
+}
+
+.tier-count {
+  flex: none;
   font-size: 10px;
-  color: #8b9098;
+  color: #a1a6ad;
+  white-space: nowrap;
 }
 
 /* ---- the grid -------------------------------------------------------------------------------------------- */
@@ -204,27 +374,36 @@ body {
    lay one out. */
 .line {
   flex-direction: row;
-  gap: 6px;
-  margin-bottom: 6px;
+  gap: 7px;
+  margin-bottom: 7px;
 }
 
 .tile {
-  flex: 1;
-  height: 62px;
+  flex: none;
+  width: 57px;
+  height: 57px;
   border: 1px solid #c6c9cd;
-  /* The game's own seed tiles are softer than this was. 4px read as a square with the corners filed off;
-     the tile it sits beside is visibly rounded. */
-  border-radius: 8px;
+  border-radius: 9px;
   background: #e4e6e8;
 }
 
-/* Fills the last line so its tiles keep the width of every other line's. */
+/* Fills the last line so its tiles keep the place of every other line's. */
 .tile.hole {
   border: 1px solid transparent;
   background: transparent;
 }
 
 .tile.sel { border: 2px solid #3a3d42; }
+
+/* The game draws the None option as an empty frame with a cross in it, and so does this.
+
+   SOLID, THOUGH THE DESIGN ASKS FOR DASHED. `border: 1.6px dashed` drew NOTHING at all here - the Any tile
+   came out as a bare X on the paper with no frame round it, while every solid border on the page rendered.
+   The width is not the problem (the search rule is 1.6px and draws); it is the style keyword. */
+.tile.any {
+  border: 1.6px solid #a9adb4;
+  background: transparent;
+}
 
 /* The whole tile is the target. The star sits on top of it rather than inside, so starring and choosing
    stay two separate clicks.
@@ -234,55 +413,56 @@ body {
    the vanilla tiles" is. `align-items` alone only settles the cross axis; the column's own axis is
    `justify-content`, and without it the picture hangs from the top whatever the padding says. */
 .shot {
-  height: 60px;
+  height: 55px;
   padding: 2px;
   background: transparent;
   align-items: center;
   justify-content: center;
   /* Follows the tile, or a square corner is painted over a round one on hover. */
-  border-radius: 8px;
+  border-radius: 9px;
 }
 
 .shot:hover { background: #eef0f1; }
 
-/* The tile carries a picture and nothing else, the way the game's own does. The words are in the bubble.
+/* The tile carries a picture and nothing else, the way the game's own does. The words are on the facing page.
 
-   `color` on an image TINTS it in this engine, and without one here the picture inherits the card's ink and
+   `color` on an image TINTS it in this engine, and without one here the picture inherits the pad's ink and
    comes out dark. White is "leave it alone". The square is honest because the mod pads every icon to one
-   before it sends it - a seed vial's own sprite is one to three and would arrive squashed otherwise.
-
-   56 AND NOT 48. Going 40 -> 48 moved the layout box and changed not one pixel of the drawn vial: two
-   screenshots of the two builds are byte-identical over the tile, while the computed tree dutifully reported
-   48x48. 56 is the first step that actually draws bigger.
-
-   Why those two collapse into the same drawing was not chased - the measurement is the finding, the mechanism
-   is a guess. What it means in practice is the part worth keeping: a size picked by eye out of this file can
-   be a no-op that still reads as applied in the computed tree, so this number came off a screenshot. */
+   before it sends it - a seed vial's own sprite is one to three and would arrive squashed otherwise. */
 .shot-img {
-  width: 56px;
-  height: 56px;
+  width: 51px;
+  height: 51px;
   color: #ffffff;
 }
 
-/* The game draws the None option as an empty frame with a cross in it. */
+/* The cross is the letter X. Anything outside Latin-1 comes out as a box in the game's font. */
 .shot-cross {
-  height: 34px;
-  font-size: 20px;
+  height: 22px;
+  font-family: game-hand;
+  font-size: 22px;
   color: #8b9098;
   text-align: center;
   align-items: center;
 }
 
+.shot-name {
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: #8b9098;
+  text-align: center;
+}
+
 /* ---- the star -------------------------------------------------------------------------------------------- */
 
-/* Over the tile's top right corner. `position: fixed` is measured from the viewport, so this is placed by the
-   tile it sits in rather than by the page. */
+/* Over the tile's top right corner, and ITS OWN CLICK TARGET - never the tile's. `position: fixed` is measured
+   from the viewport, so this is placed by the tile it sits in rather than by the page. The button is bigger
+   than the picture on purpose: eleven pixels is a mark, not a target. */
 .star {
   position: absolute;
-  top: 1px;
-  right: 1px;
-  width: 18px;
-  height: 18px;
+  top: 0;
+  right: 0;
+  width: 15px;
+  height: 15px;
   background: transparent;
   align-items: center;
   justify-content: center;
@@ -291,8 +471,8 @@ body {
 /* The picture is white; `color` tints it. Its size comes from CSS alone - the HTML width and height
    attributes never reach the layout, which runs without Unity and cannot read a PNG. */
 .star-img {
-  width: 14px;
-  height: 14px;
+  width: 11px;
+  height: 11px;
   color: #b3b7bd;
 }
 
@@ -303,8 +483,8 @@ body {
   position: absolute;
   top: 1px;
   left: 1px;
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
   font-size: 11px;
   font-weight: 700;
   color: #a9adb4;
@@ -315,68 +495,391 @@ body {
 
 .hide.on { color: #b4443c; }
 
-/* ---- the hover bubble ------------------------------------------------------------------------------------ */
+.empty {
+  padding: 24px 8px;
+  color: #8b9098;
+  text-align: center;
+}
 
-/* Placed by the script inside the ROW it describes, which is what keeps it on the tile the pointer is on.
+/* ---- the hover label ------------------------------------------------------------------------------------- */
 
-   NOT `position: fixed`, and that is the fix for two separate faults at once.
+/*
+  ONE PER LINE OF FIVE, BUILT WITH THE LINE AND NEVER TOUCHED AGAIN.
 
-   A fixed box is measured against the viewport, and this page cannot say where a tile is in the viewport: every
-   number it can read is a layout coordinate and the scroll offset is in none of them. On a scrolled list the
-   bubble therefore appeared hundreds of pixels below the tile it belonged to. And the engine treats a fixed box
-   as modal by nature - it gives it a hit target whether or not anything listens to it, because a backdrop has to
-   block the page under it - and draws it last, above everything. So the bubble caught the pointer for whichever
-   tile it happened to cover: the click reached the bubble, the bubble answers nothing, the seed was never
-   chosen, and not even the stray-click reporter saw it, because a fixed box is lifted out of the list it was
-   written inside.
+  A hover writes text and an offset on nodes that are already there - and adds or removes nothing. That is the
+  whole design constraint, and it is #69 written as a rule: the old bubble was CREATED on `mouseenter`, which
+  is a structural change, which rebuilt the page, which destroyed and recreated every tile, which raised
+  `mouseenter` again for the new object under a pointer that had not moved. uGUI raises a click only when the
+  press and the release land on the SAME object, so the tile a player pressed was destroyed several times
+  before they let go and no click was ever raised.
 
-   Absolute, inside the row, is measured against that row and carried along when the list scrolls, and it is an
-   ordinary box in an ordinary place that nothing gives a hit target to.
+  ONE PER LINE RATHER THAN ONE PER TILE, because the node count is paid for on every render and a catalogue is
+  seven hundred tiles. A line's label is empty and invisible unless the pointer is on that line.
 
-   `pointer-events: none` stays anyway. It costs nothing, it is what a tooltip is, and it is the one line that
-   still holds if this ever becomes something the engine would otherwise let the player touch. */
-/* THE BACKGROUND IS TRANSLUCENT, THE TEXT IS NOT. Alpha on the fill leaves the tile underneath faintly
-   readable, which is what stops the bubble reading as a second window dropped on the picker; putting the
-   same 80% on the element instead would take the words down with it, and the words are the whole reason
-   the bubble exists.
+  NOT `position: fixed`, and that was never cosmetic. A fixed box is measured against the viewport, and this
+  page cannot say where a tile is in the viewport: every number it can read is a layout coordinate and the
+  scroll offset is in none of them. The engine also treats a fixed box as modal by nature - it gives it a hit
+  target whether or not anything listens to it, and draws it above everything - so it catches the clicks meant
+  for the tile under it. Absolute inside the line needs no coordinate to be measured at all: the column number
+  says where the tile is, and the line scrolls with the list.
 
-   THE PURPLE IS THE BREEDING TENT'S OWN, MEASURED. `TentFabric` in breeding_tent.glb is (0.38, 0.055, 0.68)
-   in linear space, which is #A642D7 in sRGB. Sampling the tent in a screenshot gives about #340390 instead,
-   because the tent stands in shade - the authored colour is the one that reads as "the tent", and a colour
-   picked off a lit pixel would have been a different purple in every room. */
-.bubble {
+  THE INK IS THE PAD'S OWN. No purple, no translucency: the label is a slip of the same dark ink the rule and
+  the selected tile are drawn in, and it is opaque, because a word read through a picture is a word read twice.
+*/
+.tip {
   position: absolute;
-  /* The row's own top. The bubble is beside the tile rather than under it, so it needs no vertical offset -
-     and having none is what makes it impossible to place on the wrong row. */
-  top: 0;
+  /* The line's own top, which is the tile's top. The label stands beside the tile rather than under it, so it
+     needs no vertical offset - and having none is what makes it impossible to place on the wrong row. */
+  top: 6px;
   pointer-events: none;
-  padding: 6px 8px;
-  border: 1px solid #3a3d42;
-  border-radius: 4px;
-  background: rgba(166, 66, 215, 0.80);
-  /* Born invisible and faded up by the script on the frame after it is placed: the engine has one style to
-     apply and no change to animate if both happen in the same pass, and a bubble that appears at full strength
-     is a bubble that flashes. */
+  /* HIDDEN BY `display`, NOT BY `opacity`, and that is the difference between this and the label it replaces.
+     The old one was a single box with its background and its word on the same element, so `opacity: 0` took
+     the whole thing away. This one has children that carry ink of their own - the body and the arrow - and
+     opacity did NOT reach them: every line drew a black slip and a black diamond over its first tile with
+     nothing hovered. `display: none` is the only hiding that is certain here, and an absolute box costs no
+     layout either way. */
+  display: none;
   opacity: 0;
   transition: opacity 110ms;
 }
 
-.bubble.on { opacity: 1; }
+/* Two steps, because the fade needs a frame where the label exists and is still transparent. */
+.tip.up { display: flex; }
+.tip.up.on { opacity: 1; }
 
-.bubble-name {
-  font-size: 12px;
+.tip-body {
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: #3a3d42;
+  overflow: hidden;
+}
+
+/* Points at the tile. A square turned forty-five degrees, drawn AFTER the body so the half that overlaps it
+   disappears into the same ink - there is no border-triangle trick here, and no z-index to order one with. */
+.tip-arrow {
+  position: absolute;
+  /* Level with the middle of the tile: the label's own top is 6 into the line, the tile is 57 tall, and the
+     arrow is 8. */
+  top: 18px;
+  left: -4px;
+  width: 8px;
+  height: 8px;
+  background: #3a3d42;
+  transform: rotate(45deg);
+}
+
+/* On the last two columns the label stands to the LEFT of its tile, so the arrow changes sides with it. */
+.tip.flip .tip-arrow { left: auto; right: -4px; }
+
+.tip-name {
+  font-family: game-hand;
+  font-size: 18px;
+  color: #f2f3f4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tip-tier {
+  font-size: 11px;
+  color: #a8adb4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- the second sheet: the record -------------------------------------------------------------------------- */
+
+.sheet {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* The line printed over the resting state - what the field is set to, rather than what the pointer is on. */
+.rec-head {
+  font-size: 10px;
   font-weight: 700;
+  letter-spacing: 2px;
+  color: #8b9098;
+  margin-bottom: 6px;
+}
+
+.rec-top {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+/* `color` TINTS a picture in this engine, so white is "leave it alone". The mod pads every icon to a square
+   before it sends it, which is why this box can be one. */
+.rec-bud {
+  flex: none;
+  width: 56px;
+  height: 56px;
   color: #ffffff;
 }
 
-.bubble-line {
-  font-size: 11px;
-  line-height: 14px;
-  color: #ecdcf5;
+/* The Any state carries the same frame the Any tile does, with the same letter in it. */
+.rec-any {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border: 1.6px solid #a9adb4;
+  border-radius: 9px;
+  font-family: game-hand;
+  font-size: 24px;
+  color: #8b9098;
+  text-align: center;
+  align-items: center;
+  justify-content: center;
 }
 
-.empty {
-  padding: 24px 8px;
-  color: #71767e;
+.rec-id {
+  flex: 1;
+  min-width: 0;
+}
+
+.rec-name {
+  font-family: game-hand;
+  font-size: 34px;
+  color: #23262b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rec-sub {
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: #8b9098;
+}
+
+.rec-star {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: #e0a72c;
+}
+
+/* Hand-drawn on the mock, a rule here. Same reason as the head rule: a stroke is a sprite, not a glyph. */
+.rec-rule {
+  flex: none;
+  height: 1px;
+  margin: 10px 0 8px 0;
+  background: #bdc1c6;
+}
+
+.pill-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.pill {
+  flex: none;
+  height: 18px;
+  padding: 0 8px;
+  border-radius: 9px;
+  background: #e0e2e5;
+  color: #4a4f57;
+  font-size: 10px;
   text-align: center;
+  align-items: center;
+  white-space: nowrap;
+}
+
+/* The cross this seed came from: two boxed cells and the letter between them. */
+.cross {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.parent {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid #bdc1c6;
+  border-radius: 4px;
+  background: #e9eaec;
+}
+
+.parent-k {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #8b9098;
+  white-space: nowrap;
+}
+
+.parent-v {
+  font-family: game-hand;
+  font-size: 17px;
+  color: #23262b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cross-x {
+  flex: none;
+  width: 14px;
+  font-family: game-hand;
+  font-size: 18px;
+  color: #8b9098;
+  text-align: center;
+}
+
+/* The four numbers, in a row of equal cells. */
+.cells {
+  flex-direction: row;
+  align-items: stretch;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.cell {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 6px 6px 6px;
+  border: 1px solid #bdc1c6;
+  border-radius: 4px;
+  background: #e0e2e5;
+}
+
+.cell-k {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #8b9098;
+  white-space: nowrap;
+}
+
+.cell-v {
+  font-family: game-hand;
+  font-size: 21px;
+  color: #23262b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* One "LABEL value" line under the record, for everything that is neither a number cell nor a parent. */
+.fact {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 3px 0;
+  border-bottom: 1px solid #c6c9cd;
+}
+
+.fact-k {
+  flex: none;
+  width: 66px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #8b9098;
+  padding-top: 2px;
+}
+
+.fact-v {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  color: #23262b;
+}
+
+/* Fills whatever is left between the record and the dock, so the dock does not float up the sheet when the
+   record is short. */
+.rec-gap {
+  flex: 1;
+  min-height: 0;
+  color: #8b9098;
+  font-size: 12px;
+  text-align: center;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ---- the dock: effect filters ------------------------------------------------------------------------------ */
+
+/*
+  AT THE FOOT OF THE SHEET IN ALL THREE STATES, so it never moves under the pointer.
+
+  On one page these were a drop-down behind a chip, because a chip per effect ran off the edge of the card as
+  soon as a mod declared more than a handful of tags - which is exactly what a strain catalogue does. With a
+  second page there is room to show the whole list, so it is shown: this is the half of the picker that says
+  what is NOT in the grid, and a filter that has to be opened to be read is a filter that gets forgotten with
+  something still ticked.
+*/
+.dock {
+  flex: none;
+  padding-top: 8px;
+}
+
+.dock-head {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.dock-name {
+  flex: none;
+  font-family: game-hand;
+  font-size: 19px;
+  color: #23262b;
+  white-space: nowrap;
+}
+
+.dock-fill {
+  flex: 1;
+  min-width: 0;
+  height: 1px;
+  background: #bdc1c6;
+}
+
+.dock-count {
+  flex: none;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: #8b9098;
+  white-space: nowrap;
+}
+
+.dock-rows {
+  gap: 5px;
+  margin-top: 7px;
+}
+
+.dock-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  min-height: 20px;
+}
+
+.dchip {
+  flex-shrink: 0;
+  height: 20px;
+  padding: 0 9px;
+  border: 1px solid #bdc1c6;
+  border-radius: 10px;
+  background: #e9eaec;
+  color: #4a4f57;
+  font-size: 10px;
+  text-align: center;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.dchip:hover { background: #f2f3f4; }
+
+.dchip.on {
+  border: 1px solid #3a3d42;
+  background: #3a3d42;
+  color: #f2f3f4;
 }

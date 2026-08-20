@@ -9,7 +9,7 @@ using UnityEngine;
 namespace Clipwise.UI
 {
     /// <summary>
-    /// The seed picker: one page, drawn by the same engine the in-game phone runs.
+    /// The seed picker: vanilla's own card, and a narrower second card beside it.
     ///
     /// WHY IT IS NOT uGUI. The screen it replaces was 730 lines building a scrim, a scroll rect, an input field, a
     /// chip bar, tab buttons and a row pool by hand, plus 218 more for a tooltip. As a surface all of that is
@@ -31,10 +31,41 @@ namespace Clipwise.UI
         private const float FallbackWidth = 540f;
         private const float FallbackHeight = 620f;
 
+        /// <summary>
+        /// Air between the two pages: none.
+        ///
+        /// The two pages are one pad. The second sheet hangs off the first one's perforated edge, so a gap
+        /// between them would be a gap through the middle of a single sheet of paper. The fold itself is drawn
+        /// INSIDE both pages - a 20px gradient plus the perforation on the left, a 30px gradient on the right -
+        /// which is why nothing is needed between them.
+        /// </summary>
+        private const float Gutter = 0f;
+
+        /// <summary>
+        /// The right page as a share of the left, and a CEILING rather than a target.
+        ///
+        /// "at max as high and wide as the left side" is the constraint that came back from the test, and equal
+        /// IS the ceiling: a pad's second sheet is the same sheet of paper as its first. Applied here - in the
+        /// one place that knows how big vanilla's card actually is - rather than in a stylesheet that can only
+        /// guess. Height is not scaled at all: both pages are exactly the height of vanilla's own card.
+        /// </summary>
+        private const float RightShare = 1.0f;
+
         private static SurfaceHandle _surface;
         private static GameObject _host;
         private static View _view;
         private static Action<ItemDefinition> _onPick;
+
+        /// <summary>The measured spread, in CSS pixels, so the page can lay itself out without having to measure a
+        /// viewport it cannot see. Written by <see cref="Fit"/> and sent with the view.</summary>
+        private static float _pageW = FallbackWidth;
+        private static float _pageH = FallbackHeight;
+        private static float _pageRW = FallbackRight;
+        private static float _spreadW = FallbackSpread;
+
+        /// <summary>The fallback spread: the same arithmetic <see cref="Fit"/> does, on the fallback page.</summary>
+        private const float FallbackRight = FallbackWidth;                // RightShare is 1
+        private const float FallbackSpread = FallbackWidth * 2f;          // + Gutter, which is 0
 
         internal static bool IsOpen => _host != null;
 
@@ -128,7 +159,7 @@ namespace Clipwise.UI
             rect.anchorMax = new Vector2(0.5f, 0.5f);
             rect.pivot = new Vector2(0.5f, 0.5f);
             rect.anchoredPosition = Vector2.zero;
-            rect.sizeDelta = new Vector2(FallbackWidth, FallbackHeight);
+            rect.sizeDelta = new Vector2(FallbackSpread, FallbackHeight);
 
             try
             {
@@ -138,8 +169,8 @@ namespace Clipwise.UI
 
                 if (card == null || card.parent == null)
                 {
-                    Core.Log.Warning("[Clipwise] no ItemSelector card to sit in - using " + FallbackWidth + "x" + FallbackHeight + ".");
-                    return FallbackWidth;
+                    Core.Log.Warning("[Clipwise] no ItemSelector card to sit in - using " + FallbackSpread + "x" + FallbackHeight + ".");
+                    return Mathf.Min(FallbackSpread, FallbackHeight);
                 }
 
                 // GetComponent, NOT `as`. Under IL2CPP a cast on the interop object handed back by .parent
@@ -152,7 +183,7 @@ namespace Clipwise.UI
                 if (holder == null)
                 {
                     Core.Log.Warning("[Clipwise] the ItemSelector has no RectTransform parent - using the fallback size.");
-                    return FallbackWidth;
+                    return Mathf.Min(FallbackSpread, FallbackHeight);
                 }
 
                 // NOT a check on the card: the game activates the selector screen in the very call this patch
@@ -162,7 +193,7 @@ namespace Clipwise.UI
                 if (!holder.gameObject.activeInHierarchy)
                 {
                     Core.Log.Warning("[Clipwise] the clipboard is not on screen - using the fallback size.");
-                    return FallbackWidth;
+                    return Mathf.Min(FallbackSpread, FallbackHeight);
                 }
 
                 // THE HOLDER FOR PLACE, THE PAPER FOR SIZE, and every part of that was learned from a
@@ -188,25 +219,87 @@ namespace Clipwise.UI
                 Vector2 size = paper.rect.size;
                 if (size.x < 1f || size.y < 1f) size = new Vector2(FallbackWidth, FallbackHeight);
 
+                // TWO PAGES, AND THE SURFACE HAS TO CARRY BOTH. The left one is exactly vanilla's card, because
+                // that is where it is drawn and how it goes on looking like the page it replaces. The right one
+                // is the same sheet again - see RightShare - hanging off the perforated edge and past the board.
+                float pageW = size.x;
+                float pageH = size.y;
+                float pageRW = Mathf.Round(pageW * RightShare);
+
+                // The ceiling, enforced rather than assumed: "at most as high and as wide as the left". Equal is
+                // the ceiling, not a violation of it, and this is what makes that a fact instead of an intention.
+                pageRW = Mathf.Min(pageRW, pageW);
+
+                // Exactly twice the card with the constants above (Gutter 0, RightShare 1). Written as the sum
+                // anyway, because the sum is the thing that stays true if either constant is ever changed.
+                float wanted = pageW + Gutter + pageRW;
+
+                // NOT CLAMPED TO THE CANVAS, and that took two measurements to accept.
+                //
+                // The clipboard is not drawn on a screen-sized canvas with the card inset into it. `ManagementCanvas`
+                // IS the card: 420x600, the same rect as the paper, with the Mask inside it at the same size. So
+                // every candidate for "how much room is there" answers 420, and clamping to any of them produced a
+                // page 151 pixels wide with 26-pixel tiles on it - correct arithmetic against the wrong box.
+                //
+                // A Canvas does not clip (only the Mask does, and this is out of it), so a rect wider than the
+                // canvas simply draws wider.
+                RectTransform canvasRect = canvasRoot.GetComponent<RectTransform>();
+                Core.LogDebug("[Clipwise] canvas '" + canvasRoot.name + "' rect "
+                              + (canvasRect != null ? canvasRect.rect.size.ToString() : "?")
+                              + ", scale " + canvasRoot.localScale + ".");
+
+                _pageW = pageW;
+                _pageH = pageH;
+                _pageRW = pageRW;
+                _spreadW = wanted;
+
+                // PLACED AGAINST THE HOLDER, THEN LIFTED OUT OF IT.
+                //
+                // The holder is where vanilla's card sits, so it is the only thing that answers "where on the
+                // screen does this belong". It is also a Mask exactly one card wide, and a wider surface
+                // parented into it is cut off - uGUI does not clip by default, but a RectMask2D above you very
+                // much does.
+                //
+                // So: sized and centred under the holder, then re-parented to the canvas with
+                // worldPositionStays, which keeps the pixels exactly where they were and leaves the mask behind.
                 rect.SetParent(holder, false);
                 rect.anchorMin = new Vector2(0.5f, 0.5f);
                 rect.anchorMax = new Vector2(0.5f, 0.5f);
                 rect.pivot = new Vector2(0.5f, 0.5f);
                 rect.anchoredPosition = Vector2.zero;
-                rect.sizeDelta = size;
+                rect.sizeDelta = new Vector2(wanted, pageH);
                 rect.localScale = Vector3.one;
                 rect.localRotation = Quaternion.identity;
 
-                Core.Log.Msg("[Clipwise] surface " + size.x.ToString("0") + "x" + size.y.ToString("0")
-                             + " from '" + paper.name + "', centred in '" + holder.name + "' ("
-                             + holder.rect.width.ToString("0") + "x" + holder.rect.height.ToString("0") + ").");
+                rect.SetParent(canvasRoot, true);
 
-                return size.x;
+                // And slid right, so it is the LEFT CARD that lands on vanilla's card rather than the middle of
+                // the pair. That is what makes the second card look like it opened out beside the clipboard the
+                // player was already looking at, instead of the whole picker jumping sideways.
+                rect.anchoredPosition += new Vector2(wanted * 0.5f - pageW * 0.5f, 0f);
+
+                // THE TWO PAGE SIZES, SAID OUT LOUD. The rule they have to satisfy is "the right one is at most
+                // as high and as wide as the left", and a rule nobody can read off a screenshot is a rule that
+                // gets broken by the next change to the arithmetic.
+                Core.Log.Msg("[Clipwise] left page " + pageW.ToString("0") + "x" + pageH.ToString("0")
+                             + ", right page " + pageRW.ToString("0") + "x" + pageH.ToString("0")
+                             + " (no wider: " + (pageRW <= pageW) + ", no taller: same height by construction)"
+                             + ", surface " + wanted.ToString("0") + "x" + pageH.ToString("0")
+                             + " from '" + paper.name + "', centred in '"
+                             + holder.name + "' (" + holder.rect.width.ToString("0") + "x"
+                             + holder.rect.height.ToString("0") + ").");
+
+                // THE SHORT SIDE, whichever it is. The host scales the page by
+                // `min(hostWidth, hostHeight) / designShortSide`, so handing it the smaller of the two is what
+                // keeps the scale at exactly 1 and the page authored in real pixels. Passing the width - which is
+                // what a one-page picker did, because the page WAS the short side - would scale the whole spread
+                // by about a half the moment it got wider than it is tall.
+                return Mathf.Min(wanted, pageH);
             }
             catch (Exception e)
             {
                 Core.Log.Warning("[Clipwise] could not place the surface: " + e.Message);
-                return FallbackWidth;
+                return Mathf.Min(FallbackSpread, FallbackHeight);
             }
         }
 
@@ -288,11 +381,15 @@ namespace Clipwise.UI
         }
 
         /// <summary>
-        /// The three view settings that outlive one open: <c>sort|favourites|discovered</c>.
+        /// The view settings that outlive one open: <c>sort|favourites|discovered|tierGroups|tierDescending</c>.
         ///
-        /// Kept on the C# side because they are the player's and not this page's - the same three were persisted
+        /// Kept on the C# side because they are the player's and not this page's - the first three were persisted
         /// before this picker existed, and a player who set "sort by yield" last week should not have to set it
         /// again because the screen was rebuilt in a different technology.
+        ///
+        /// THE SHORT FORM IS STILL ACCEPTED. Three fields is what every build before the tier groups sent, and
+        /// the page is a file on disk that a player can be running an older copy of (see the hot-reload override
+        /// folder). Missing fields keep whatever is stored rather than resetting it to a default.
         /// </summary>
         private static string State(string arg)
         {
@@ -302,6 +399,8 @@ namespace Clipwise.UI
             if (int.TryParse(parts[0], out int sort)) Prefs.UserPrefs.SortMode = sort;
             Prefs.UserPrefs.OnlyFavourites = parts[1] == "1";
             Prefs.UserPrefs.OnlyDiscovered = parts[2] == "1";
+            if (parts.Length > 3) Prefs.UserPrefs.TierGroups = parts[3] == "1";
+            if (parts.Length > 4) Prefs.UserPrefs.TierDescending = parts[4] == "1";
             Prefs.UserPrefs.Flush();
             return "ok";
         }
@@ -321,6 +420,17 @@ namespace Clipwise.UI
             var sb = new StringBuilder(1024);
             sb.Append("{\"title\":").Append(Quote(view.Title));
 
+            // THE TWO CARD SIZES, MEASURED IN C# AND SENT. The page cannot ask how big it is: a surface answers
+            // layout coordinates and nothing about the viewport, so a script that wants two cards side by side
+            // has to be told how wide each of them is. These are the numbers `Fit` just measured, in the same CSS
+            // pixels the page is authored in - and `pageRW` already carries the ceiling, so the stylesheet never
+            // has to decide how big "at most as wide as the left" is.
+            sb.Append(",\"w\":").Append(_spreadW.ToString("0.##", Culture))
+              .Append(",\"h\":").Append(_pageH.ToString("0.##", Culture))
+              .Append(",\"pageW\":").Append(_pageW.ToString("0.##", Culture))
+              .Append(",\"pageRW\":").Append(_pageRW.ToString("0.##", Culture))
+              .Append(",\"gap\":").Append(Gutter.ToString("0.##", Culture));
+
             // The heading over everything a mod added, taken from the category its own rows are in. Worked out
             // here rather than in the page: a category key is namespaced (`clipwise:vanilla`), and the page
             // guessing at that shape printed the game's own seeds under the heading "VANILLA" twice.
@@ -330,6 +440,10 @@ namespace Clipwise.UI
             sb.Append(",\"sort\":").Append(Prefs.UserPrefs.SortMode)
               .Append(",\"onlyFav\":").Append(Prefs.UserPrefs.OnlyFavourites ? "true" : "false")
               .Append(",\"onlyDisc\":").Append(Prefs.UserPrefs.OnlyDiscovered ? "true" : "false")
+              // The tier groups inside a mod's section, and which way round they run. A second level of sorting
+              // rather than a mode of the first: a player can ask for tier 5 at the top AND A-Z inside it.
+              .Append(",\"group\":").Append(Prefs.UserPrefs.TierGroups ? "true" : "false")
+              .Append(",\"dir\":").Append(Prefs.UserPrefs.TierDescending ? "true" : "false")
               .Append(",\"hiddenCount\":").Append(Prefs.UserPrefs.HiddenCount)
               // The tooltip preference outlived the card it was written for: the bubble beside a tile is the
               // same thing in the same place, so the same switch turns it off.
@@ -401,6 +515,19 @@ namespace Clipwise.UI
                   .Append(",\"growth\":").Append(Growth(row).ToString(Culture))
                   .Append(",\"value\":").Append((row.Facts?.MarketValue ?? 0f).ToString("0.##", Culture))
                   .Append(",\"tags\":").Append(Tags(row))
+                  // The rest of what the game itself knows about this item. Sent because the detail card shows
+                  // one line per fact that HAS a value and leaves the row out otherwise - a card that promises a
+                  // field and shows nothing under it is worse than a shorter card.
+                  .Append(",\"product\":").Append(Quote(row.Facts?.ProductName))
+                  .Append(",\"drug\":").Append(Quote(row.Facts?.DrugType))
+                  .Append(",\"buy\":").Append((row.Facts?.PurchasePrice ?? 0f).ToString("0.##", Culture))
+                  .Append(",\"harvest\":").Append(Quote(row.Facts?.HarvestTarget))
+                  // Which mod filed this entry, or null when only the classifier placed it. The card names it so
+                  // a player can see where a strain came from without opening the mod list.
+                  .Append(",\"source\":").Append(Quote(row.Source))
+                  // What the registering mod itself wants on the card, asked NOW rather than remembered - the
+                  // one fact that needs it is a player's own name, which they can change at any desk.
+                  .Append(",\"facts\":").Append(ExtraFacts(row))
                   .Append('}');
             }
             sb.Append("]}");
@@ -435,6 +562,24 @@ namespace Clipwise.UI
                 if (!first) sb.Append(',');
                 first = false;
                 sb.Append(Quote(tag));
+            }
+            return sb.Append(']').ToString();
+        }
+
+        /// <summary>The rows the registering mod supplied for this item, as a JSON array of label/value pairs,
+        /// or <c>[]</c>. See <see cref="Catalog.Facts"/> for why they are asked rather than stored.</summary>
+        private static string ExtraFacts(Row row)
+        {
+            var rows = Catalog.Facts(row?.Source, row?.ItemId);
+            if (rows.Count == 0) return "[]";
+
+            var sb = new StringBuilder(64);
+            sb.Append('[');
+            for (int i = 0; i < rows.Count; i++)
+            {
+                if (i > 0) sb.Append(',');
+                sb.Append("{\"k\":").Append(Quote(rows[i].Key))
+                  .Append(",\"v\":").Append(Quote(rows[i].Value)).Append('}');
             }
             return sb.Append(']').ToString();
         }

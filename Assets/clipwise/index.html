@@ -1,26 +1,77 @@
 <link rel="stylesheet" href="app.css">
 
-<div class="card">
-  <div class="head">
-    <button class="back" id="back">&lt; Back</button>
-    <span class="head-title" id="title">Seed</span>
-    <span class="head-count" id="count"></span>
+<!--
+  A PAD, LYING ON VANILLA'S OWN CLIPBOARD.
+
+  The board is the game's and is not drawn here at all. What is drawn is the pad on it: the left page is the
+  pad's top sheet - perforation down its right edge, the stack of sheets under it showing along the bottom -
+  and the right page is the next sheet, exactly the same size, hanging off that fold and lying past the right
+  edge of the board.
+
+  Not a binder and not a notebook. There is no spine, no ring, no tab rail and no cover: those belong to an
+  object the player is not holding.
+
+  The widths are NOT in the stylesheet. A surface page cannot measure its own viewport, so the mod measures
+  vanilla's own card and sends the numbers with the view - see `pageW` and `pageRW` in SurfacePicker.ViewJson.
+  app.js writes them onto these boxes on the first render. With `RightShare` at 1 the two are equal, which is
+  what makes the second sheet the same sheet of paper rather than a panel beside it.
+
+  ORDER IS PAINT ORDER. There is no z-index in this engine, so the fold, the perforation and the stack are
+  written FIRST inside their page and everything else paints over them.
+-->
+<div class="pad" id="spread">
+
+  <div class="page left" id="pageL">
+
+    <!-- The fold, drawn inside the sheet rather than between the sheets: a 20px gradient into the crease, with
+         the perforation punched through it. -->
+    <div class="fold-l"></div>
+    <div class="perf">
+      <i class="hole"></i><i class="hole"></i><i class="hole"></i><i class="hole"></i>
+      <i class="hole"></i><i class="hole"></i><i class="hole"></i><i class="hole"></i>
+      <i class="hole"></i><i class="hole"></i><i class="hole"></i><i class="hole"></i>
+      <i class="hole"></i><i class="hole"></i><i class="hole"></i><i class="hole"></i>
+    </div>
+
+    <!-- The sheets underneath, seen along the bottom edge. Deepest first. -->
+    <div class="stack-b"></div>
+    <div class="stack-a"></div>
+    <div class="stack-edge"></div>
+
+    <div class="head">
+      <button class="back" id="back">&lt; Back</button>
+      <span class="head-title" id="title">Seed</span>
+      <span class="head-count" id="count"></span>
+    </div>
+
+    <div class="rule"></div>
+
+    <!-- WRITTEN ON A RULED LINE, not in a box: this is a pad, and the search is the line at the top of it.
+         No data-typing. The field keeps the caret whenever nothing else holds one, and a caret in a field is
+         what stops the GAME seeing keys at all - including the Escape that closes this page. Click to type. -->
+    <div class="find-line">
+      <span class="find-label">Search</span>
+      <input class="find" id="find" maxlength="40">
+    </div>
+
+    <div class="chips" id="chips"></div>
+
+    <div class="list" id="rows"></div>
   </div>
 
-  <div class="rule"></div>
+  <!-- `shut` is the folded state the opening effect starts from - see app.js. -->
+  <div class="page right shut" id="pageR">
 
-  <!-- No data-typing. It keeps the caret in this field whenever nothing else holds one, and a caret in a
-       field is what stops the GAME seeing keys at all - including the Escape that closes this page. Click
-       the box to type. -->
-  <input class="find" id="find" placeholder="Search" maxlength="40">
+    <!-- The other half of the crease: 30px, dark at the fold and lightening into the sheet. -->
+    <div class="fold-r"></div>
 
-  <div class="chips" id="chips"></div>
+    <!-- The record: whatever the pointer is on, or what the field is set to when it is on nothing. -->
+    <div class="sheet" id="sheet"></div>
 
-  <!-- The open drop-down's tick list. Under the bar rather than over the grid, so nothing is dismissed by
-       accident and the page needs no second click to close it. -->
-  <div class="drop closed" id="drop"></div>
+    <!-- Docked at the foot in every one of those states, so it never moves under the pointer. -->
+    <div class="dock" id="fx"></div>
+  </div>
 
-  <div class="list" id="rows"></div>
 </div>
 
 <script src="app.js"></script>

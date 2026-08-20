@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Reflection;
 
@@ -43,6 +43,7 @@ namespace Clipwise.Api
         private static Action<string, string, string, int, string> _registerCategory;
         private static Action<string, string, string, string, string[], int, string, string, int> _registerItem;
         private static Action<string, string> _registerTagLabel;
+        private static Action<string, Func<string, string>> _registerFacts;
 
         /// <summary>True only when the Clipwise host is installed AND bound. Rarely needed - the API is a safe
         /// no-op when absent.</summary>
@@ -105,6 +106,41 @@ namespace Clipwise.Api
             EnsureBound();
             if (_registerTagLabel != null) _registerTagLabel(tg, lbl);
             else _pending.Add(() => _registerTagLabel?.Invoke(tg, lbl));
+        }
+
+
+        /// <summary>
+        /// Answer for your own items with extra rows on the picker's detail card.
+        ///
+        /// <paramref name="provider"/> is handed one <c>ItemDefinition.ID</c> and returns one
+        /// <c>"LABEL	value"</c> line per row, separated by newlines. An empty answer, a blank value or a
+        /// missing line simply leaves that row OUT - never show a label with nothing under it.
+        ///
+        /// <code>
+        ///   Clipboard.Facts("doodesch.breedtoseed", itemId =>
+        ///   {
+        ///       StrainDef s = StrainTable.BySeedId(itemId);
+        ///       if (s == null) return null;
+        ///       string who = Register.ShownName(s);          // live, and never the raw Steam name
+        ///       return who == null ? null : "DISCOVERED BY	" + who;
+        ///   });
+        /// </code>
+        ///
+        /// ASKED EVERY TIME THE PICKER OPENS, never cached. That is why this takes a callback rather than a
+        /// string: a name that resolves against a live register has to be read live, or a player who renames
+        /// themselves keeps seeing the old name here after every other surface has caught up.
+        ///
+        /// Only the source that registered an item is asked about it. Load-order-proof; no-op without Clipwise;
+        /// needs host ABI 2.
+        /// </summary>
+        public static void Facts(string source, Func<string, string> provider)
+        {
+            if (string.IsNullOrEmpty(source) || provider == null) return;
+            string src = source;
+            Func<string, string> p = provider;
+            EnsureBound();
+            if (_registerFacts != null) _registerFacts(src, p);
+            else _pending.Add(() => _registerFacts?.Invoke(src, p));
         }
 
         /// <summary>Discover a convention type named <c>ClipwiseProbe</c> with a static <c>Register()</c> in THIS
@@ -186,6 +222,9 @@ namespace Clipwise.Api
                 _registerCategory = Get<Action<string, string, string, int, string>>(t, "RegisterCategory");
                 _registerItem = Get<Action<string, string, string, string, string[], int, string, string, int>>(t, "RegisterItem");
                 _registerTagLabel = Get<Action<string, string>>(t, "RegisterTagLabel");
+                // ABI 2. Null against an older host, and Facts() is then a no-op - which is the whole reason the
+                // table is read field by field instead of demanded whole.
+                _registerFacts = Get<Action<string, Func<string, string>>>(t, "RegisterFacts");
 
                 if (_registerCategory == null || _registerItem == null) return;   // partial table - try again next call
                 _bound = true;

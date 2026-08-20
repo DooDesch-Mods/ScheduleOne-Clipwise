@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using Clipwise.Model;
@@ -21,6 +21,10 @@ namespace Clipwise.Index
         private static readonly Dictionary<string, CategoryDef> _categories = new(StringComparer.Ordinal);
         private static readonly Dictionary<string, Claim> _claims = new(StringComparer.Ordinal);
         private static readonly Dictionary<string, string> _tagLabels = new(StringComparer.Ordinal);
+
+        /// <summary>One fact provider per source. Asked every time a picker is built, never cached - see
+        /// <see cref="Facts"/>.</summary>
+        private static readonly Dictionary<string, Func<string, string>> _factProviders = new(StringComparer.Ordinal);
 
         private static Dictionary<string, ItemEntry> _resolved;
         private static List<string> _conflicts = new();
@@ -92,6 +96,57 @@ namespace Clipwise.Index
 
             _claims[claim.ClaimKey] = claim;   // upsert
             _resolved = null;
+        }
+
+        /// <summary>Let a source answer for its own items with extra card rows. Registering twice replaces.</summary>
+        public static void RegisterFacts(string source, Func<string, string> provider)
+        {
+            if (!ValidIdent(source) || provider == null) return;
+            _factProviders[source] = provider;
+        }
+
+        /// <summary>
+        /// The extra card rows one source has for one item, as (label, value) pairs.
+        ///
+        /// ASKED, NEVER STORED. The reason is a name: a discoverer's alias lives in the registering mod's own
+        /// register and a player can change it at any time, so a value taken once at registration is a name
+        /// frozen at mod-start. Nothing here is cached, and a provider that answers nothing leaves the rows out
+        /// rather than showing them empty - the card's rule everywhere else.
+        ///
+        /// Only the source that CLAIMED the item is asked. A mod answering for another mod's entries would be a
+        /// way to put words on a card its author never wrote.
+        /// </summary>
+        public static List<KeyValuePair<string, string>> Facts(string source, string itemId)
+        {
+            var rows = new List<KeyValuePair<string, string>>();
+            if (string.IsNullOrEmpty(source) || string.IsNullOrEmpty(itemId)) return rows;
+            if (!_factProviders.TryGetValue(source, out var provider) || provider == null) return rows;
+
+            string raw;
+            try { raw = provider(itemId); }
+            catch (Exception e)
+            {
+                Core.WarnThrottled("facts-" + source, "Clipwise: '" + source + "' threw while describing an item, its extra card rows are left out: " + e.Message);
+                return rows;
+            }
+
+            if (string.IsNullOrEmpty(raw)) return rows;
+
+            foreach (string line in raw.Split('\n'))
+            {
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                int tab = line.IndexOf('\t');
+                if (tab <= 0 || tab >= line.Length - 1) continue;
+
+                string label = line.Substring(0, tab).Trim();
+                string value = line.Substring(tab + 1).Trim();
+                if (label.Length == 0 || value.Length == 0) continue;   // an empty value is "leave the row out"
+
+                rows.Add(new KeyValuePair<string, string>(label, value));
+                if (rows.Count >= 12) break;   // a card, not a spreadsheet
+            }
+
+            return rows;
         }
 
         public static void RegisterTagLabel(string tag, string label)

@@ -1,4 +1,4 @@
-using Clipwise.Index;
+﻿using Clipwise.Index;
 using Clipwise.Model;
 
 namespace Clipwise.Bridge
@@ -31,6 +31,12 @@ namespace Clipwise.Bridge
             {
                 try { Catalog.RegisterTagLabel(tag, label); }
                 catch (System.Exception e) { Core.Log.Warning("Clipwise: RegisterTagLabel failed: " + e.Message); }
+            };
+
+            ClipwiseBridge.RegisterFacts = (source, provider) =>
+            {
+                try { Catalog.RegisterFacts(source, provider); }
+                catch (System.Exception e) { Core.Log.Warning("Clipwise: RegisterFacts failed: " + e.Message); }
             };
         }
     }

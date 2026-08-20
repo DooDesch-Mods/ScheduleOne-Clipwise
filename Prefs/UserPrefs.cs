@@ -27,6 +27,14 @@ namespace Clipwise.Prefs
 
         /// <summary>Index into the picker's sort modes. Out-of-range values fall back to the default order.</summary>
         public int sortMode;
+
+        /// <summary>Split a mod's section into one group per tier. On by default - a strain catalogue is the
+        /// list this picker was rebuilt for, and tiers are how its owner thinks about it.</summary>
+        public bool tierGroups = true;
+
+        /// <summary>Highest tier first. Independent of <see cref="sortMode"/>, which orders the tiles INSIDE
+        /// each group, so both can be set at once.</summary>
+        public bool tierDescending;
     }
 
     /// <summary>
@@ -51,6 +59,18 @@ namespace Clipwise.Prefs
         {
             get => _data.sortMode;
             set { if (_data.sortMode != value) { _data.sortMode = value; _dirty = true; Flush(); } }
+        }
+
+        public static bool TierGroups
+        {
+            get => _data.tierGroups;
+            set { if (_data.tierGroups != value) { _data.tierGroups = value; _dirty = true; } }
+        }
+
+        public static bool TierDescending
+        {
+            get => _data.tierDescending;
+            set { if (_data.tierDescending != value) { _data.tierDescending = value; _dirty = true; } }
         }
 
         public static bool OnlyDiscovered
