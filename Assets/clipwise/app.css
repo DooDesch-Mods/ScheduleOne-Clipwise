@@ -164,9 +164,6 @@ body {
   height: 30px;
 }
 
-/* NO FIXED WIDTH, and that is the design rather than an oversight: the title is centred in what is LEFT after
-   Back and the count, so it sits a little right of the sheet's own middle. Balancing the two ends with equal
-   spacers centres it perfectly and is a different drawing. */
 .back {
   flex: none;
   height: 26px;
@@ -181,6 +178,16 @@ body {
 
 .back:hover { color: #55648c; }
 
+/* The narrower end of the head, padded out to the width of the wider one, so what is left over for the title is
+   the same on both sides and its middle is the sheet's middle. Written per render - see centreHead. */
+.head-pad {
+  flex: none;
+  width: 0;
+}
+
+/* CENTRED ON THE SHEET, not in the room left beside Back and the count. It used to be the second thing, which
+   put "Seed" twenty-odd pixels right of the middle and moved it again whenever the count went from "7" to
+   "12 of 723" - a title that shifts when a filter is typed. */
 .head-title {
   flex: 1;
   min-width: 0;
@@ -602,9 +609,13 @@ body {
 */
 .tip {
   position: absolute;
-  /* The line's own top, which is the tile's top. The label stands beside the tile rather than under it, so it
-     needs no vertical offset - and having none is what makes it impossible to place on the wrong row. */
-  top: 6px;
+  /* THE LINE'S OWN TOP, AND AS TALL AS A TILE - the height is written in script, because only the mod knows how
+     big a tile came out (see tileSize). The slip is centred in that box, which is what puts the slip's middle,
+     the tile's middle and the arrow on one line. Held six pixels down with no height, the arrow was level with
+     the tile and two thirds of the way down a slip that is thirty pixels tall, which is the "Pfeilspitze nicht
+     richtig positioniert" of #240. */
+  top: 0;
+  justify-content: center;
   pointer-events: none;
   /* HIDDEN BY `display`, NOT BY `opacity`, and that is the difference between this and the label it replaces.
      The old one was a single box with its background and its word on the same element, so `opacity: 0` took
@@ -624,6 +635,9 @@ body {
 /* ONE LINE, NOT TWO: the name and the tier stand side by side on the slip, which is what makes it a label
    rather than a small card. The default flex direction here is column, so a row has to say so. */
 .tip-body {
+  /* NOT stretched to the tile's height - the box around it is a tile tall now, and a slip that fills it is a
+     panel beside the grid rather than a label. */
+  flex: none;
   flex-direction: row;
   align-items: baseline;
   gap: 7px;
@@ -637,8 +651,8 @@ body {
    disappears into the same ink - there is no border-triangle trick here, and no z-index to order one with. */
 .tip-arrow {
   position: absolute;
-  /* Level with the middle of the tile, and written in script because the tile's height is: the label's own top
-     is 6 into the line and the arrow is 8, so the top is half the tile less ten. */
+  /* Level with the middle of the tile AND with the middle of the slip - the two are the same line now, see
+     `.tip`. Written in script because the tile's height is: half the tile, less half the arrow. */
   left: -4px;
   width: 8px;
   height: 8px;

@@ -56,6 +56,10 @@ namespace Clipwise.UI
         private static View _view;
         private static Action<ItemDefinition> _onPick;
 
+        /// <summary>The icon pass that outlives the opening frame - see <see cref="Rest"/>. Held so closing the
+        /// picker can stop it.</summary>
+        private static object _rest;
+
         /// <summary>The measured spread, in CSS pixels, so the page can lay itself out without having to measure a
         /// viewport it cannot see. Written by <see cref="Fit"/> and sent with the view.</summary>
         private static float _pageW = FallbackWidth;
@@ -126,7 +130,12 @@ namespace Clipwise.UI
 
                 // After the mount, because the page asks for its pictures as soon as it builds and the store has
                 // to have them by then. Cached across opens, so this is only slow the first time.
-                SurfaceIcons.Supply(_surface, view);
+                SurfaceIcons.Supply(_surface, view, SurfaceIcons.OpenBudgetMs, announce: true, out bool more);
+
+                // AND THE REST OF THEM WHILE THE PICKER IS UP. What one frame can pay for was the ceiling on how
+                // many pictures a save could have at all, and the rows are ordered with the game's own first, so
+                // the tiles that lost theirs were always a mod's - see SurfaceIcons.OpenBudgetMs.
+                if (more) _rest = MelonLoader.MelonCoroutines.Start(Rest());
 
                 return true;
             }
@@ -303,8 +312,47 @@ namespace Clipwise.UI
             }
         }
 
+        /// <summary>
+        /// Convert the icons the opening frame could not pay for, a few milliseconds per frame, and tell the page
+        /// ONCE when they have all arrived.
+        ///
+        /// ONE MESSAGE, AT THE END, AND ONLY IF SOMETHING CAME OF IT. `picker.changed` makes the page rebuild
+        /// itself, and a rebuild destroys every tile - which is how #69 stopped clicks being raised at all. One of
+        /// them a second after the clipboard opens is a risk worth the pictures; one per frame is the bug back.
+        /// On the second open there is nothing left to convert, so nothing is emitted and nothing rebuilds.
+        /// </summary>
+        private static System.Collections.IEnumerator Rest()
+        {
+            int made = 0;
+
+            // Never in the frame the picker opened: that frame has already spent its budget, and the page has not
+            // drawn once yet.
+            yield return null;
+
+            bool more = true;
+            while (more && IsOpen && _surface != null && _view != null)
+            {
+                made += SurfaceIcons.Supply(_surface, _view, SurfaceIcons.FrameBudgetMs, announce: false, out more);
+                yield return null;
+            }
+
+            _rest = null;
+            if (made <= 0 || !IsOpen || _surface == null) yield break;
+
+            Core.LogDebug("[Clipwise] icons: " + made + " more made after the open - telling the page.");
+            _surface.Emit("picker.changed");
+        }
+
         internal static void Close()
         {
+            // Stopped rather than left to notice: it holds the surface handle, and the next open starts its own.
+            if (_rest != null)
+            {
+                try { MelonLoader.MelonCoroutines.Stop(_rest); }
+                catch (Exception e) { Core.Log.Warning("[Clipwise] the icon pass would not stop: " + e.Message); }
+                _rest = null;
+            }
+
             // First, and outside the try: the crosshair belongs to the game, and an unmount that throws must not
             // leave it changed.
             CrosshairGuard.Restore();

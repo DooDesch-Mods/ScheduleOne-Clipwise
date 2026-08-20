@@ -38,9 +38,13 @@
     <div class="stack-a"></div>
     <div class="stack-edge"></div>
 
+    <!-- The two empty spans are what centre the title on the SHEET rather than in the room left over beside
+         Back and the count - see centreHead in app.js. Their width is written per render. -->
     <div class="head">
       <button class="back" id="back">&lt; Back</button>
+      <span class="head-pad" id="padL"></span>
       <span class="head-title" id="title">Seed</span>
+      <span class="head-pad" id="padR"></span>
       <span class="head-count" id="count"></span>
     </div>
 
