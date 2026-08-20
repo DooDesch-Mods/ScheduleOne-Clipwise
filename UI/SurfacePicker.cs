@@ -418,7 +418,10 @@ namespace Clipwise.UI
             if (view == null) return "";
 
             var sb = new StringBuilder(1024);
-            sb.Append("{\"title\":").Append(Quote(view.Title));
+            sb.Append("{\"title\":").Append(Quote(view.Title))
+              // What the field belongs to - "Pot 3" - so the resting page can say which pot it is about rather
+              // than repeating the word the player is already looking at a page of.
+              .Append(",\"owner\":").Append(Quote(view.Owner));
 
             // THE TWO CARD SIZES, MEASURED IN C# AND SENT. The page cannot ask how big it is: a surface answers
             // layout coordinates and nothing about the viewport, so a script that wants two cards side by side

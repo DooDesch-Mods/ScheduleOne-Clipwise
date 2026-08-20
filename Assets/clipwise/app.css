@@ -16,6 +16,16 @@
   TWO FACES, AND BOTH ARE THE GAME'S OWN. `game-hand` is the clipboard's handwriting (Caveat) and carries
   everything a person would have written on the pad: Back, the title, the section heads, names, the big
   numbers. `game-ui` is Open Sans and carries everything printed ON the pad: labels, counts, facts.
+
+  TWO HANDS, AND THEREFORE TWO INKS. The form is printed and the entries are written onto it, so the printed
+  half keeps the card's near-black #23262b and everything written carries a ballpoint blue:
+
+      #2b3c66   what a person wrote - Back, the title, the query, names, the big numbers
+      #3d4f78   the section heads, a shade lighter because they label rather than answer
+      #7d89a5   the same pen gone faint - a placeholder, an empty line, "Any" where a name would be
+      #e9edf5   where that writing sits on the dark hover label, with #a9b4cc for its tier
+
+  The two must not be mixed on one box: a printed label in blue reads as a mistake rather than as ink.
 */
 
 body {
@@ -45,10 +55,10 @@ body {
 }
 
 /* The right padding clears the fold and the perforation; the bottom clears the stack of sheets underneath. */
-.page.left { padding: 18px 26px 14px 20px; }
+.page.left { padding: 18px 30px 14px 20px; }
 
 /* The left padding clears the other half of the crease. */
-.page.right { padding: 18px 20px 14px 38px; }
+.page.right { padding: 20px 22px 18px 32px; }
 
 /*
   THE OPENING EFFECT, AND WHY IT IS A SCALE RATHER THAN A ROTATION.
@@ -157,19 +167,20 @@ body {
   height: 26px;
   font-family: game-hand;
   font-size: 21px;
-  color: #23262b;
+  color: #2b3c66;
   background: transparent;
   align-items: center;
   white-space: nowrap;
 }
 
-.back:hover { color: #5a5f68; }
+.back:hover { color: #55648c; }
 
 .head-title {
   flex: 1;
   min-width: 0;
   font-family: game-hand;
-  font-size: 26px;
+  font-size: 25px;
+  color: #2b3c66;
   text-align: center;
   white-space: nowrap;
 }
@@ -183,16 +194,6 @@ body {
   align-items: center;
 }
 
-/* Vanilla draws a hand-inked stroke here rather than a border. A 2px rule is the closest the subset gets; the
-   real one is a sprite and would have to be shipped as a PNG the way star.png is. Not a glyph - the game's
-   font atlases carry Latin text and nothing that could draw a stroke. */
-.rule {
-  flex: none;
-  height: 2px;
-  margin: 6px 0 10px 0;
-  background: #3a3d42;
-}
-
 /* ---- the search line --------------------------------------------------------------------------------------- */
 
 /* A written line on the pad, not a control dropped onto it: the word, then the query on a baseline rule. */
@@ -202,14 +203,14 @@ body {
   align-items: center;
   gap: 8px;
   height: 28px;
-  margin: 0 0 8px 0;
+  margin: 6px 0 0 0;
 }
 
 .find-label {
   flex: none;
   font-family: game-hand;
-  font-size: 19px;
-  color: #5b6068;
+  font-size: 17px;
+  color: #7d89a5;
   white-space: nowrap;
 }
 
@@ -223,10 +224,17 @@ body {
      do not exist here. */
   border-bottom: 1.6px solid #3a3d42;
   background: transparent;
-  color: #23262b;
-  font-size: 13px;
+  /* WRITTEN, NOT TYPED. The query is the player's own hand on the pad, so it carries the handwritten face and
+     the pen's ink; the word `Search` in front of it is the dimmer hand of a form that was printed empty. */
+  font-family: game-hand;
+  font-size: 19px;
+  color: #2b3c66;
   align-items: center;
 }
+
+/* The hint is drawn by the field itself rather than by a generated box - one of the four pseudo-element
+   spellings the parser accepts, and the only one this page needs. */
+.find::placeholder { color: #7d89a5; }
 
 /* ---- the filter chips ------------------------------------------------------------------------------------ */
 
@@ -235,39 +243,41 @@ body {
 .chips {
   flex: none;
   gap: 4px;
-  margin: 0 0 8px 0;
+  margin: 10px 0 0 0;
 }
 
 .chip-row {
   flex-direction: row;
   align-items: center;
   gap: 6px;
-  height: 24px;
-  min-height: 24px;
+  height: 26px;
+  min-height: 26px;
 }
 
+/* Written on the pad rather than printed on it, so a chip carries the hand - but not the pen: it is a control
+   the sheet came with, and only what a person WROTE onto the sheet is in ink. */
 .chip {
-  height: 22px;
+  height: 25px;
   /* Never squeezed to fit the bar: a chip narrower than its word is a chip with half a word in it. */
   flex-shrink: 0;
-  padding: 0 10px;
-  border: 1px solid #3a3d42;
-  border-radius: 11px;
-  background: #e9eaec;
-  color: #4a4f57;
-  font-size: 11px;
-  font-weight: 600;
+  padding: 0 12px;
+  border: 1.6px solid #3a3d42;
+  border-radius: 13px;
+  background: transparent;
+  color: #3a3d42;
+  font-family: game-hand;
+  font-size: 15px;
   text-align: center;
   align-items: center;
   white-space: nowrap;
 }
 
-.chip:hover { background: #f2f3f4; }
+.chip:hover { background: #e0e2e5; }
 
 .chip.on {
   background: #3a3d42;
-  border: 1px solid #3a3d42;
-  color: #f2f3f4;
+  border: 1.6px solid #3a3d42;
+  color: #e9eaec;
 }
 
 /* ---- the list -------------------------------------------------------------------------------------------- */
@@ -283,15 +293,15 @@ body {
 .section {
   flex-direction: row;
   align-items: center;
-  gap: 6px;
-  padding: 8px 2px 2px 2px;
+  gap: 7px;
+  padding: 4px 2px 6px 2px;
 }
 
 .section-name {
   flex: none;
   font-family: game-hand;
-  font-size: 21px;
-  color: #23262b;
+  font-size: 16px;
+  color: #3d4f78;
   white-space: nowrap;
 }
 
@@ -304,8 +314,7 @@ body {
 
 .section-count {
   flex: none;
-  font-size: 10px;
-  letter-spacing: 1px;
+  font-size: 11px;
   color: #8b9098;
   white-space: nowrap;
 }
@@ -314,41 +323,44 @@ body {
    under the heading and are not part of it. */
 .knob {
   flex: none;
-  height: 18px;
-  padding: 0 7px;
-  border: 1px solid #bdc1c6;
-  border-radius: 9px;
-  background: #e9eaec;
+  height: 19px;
+  padding: 0 8px;
+  /* Darker than the mock's #b1b6bc and a fifth of a pixel thicker: an unfilled outline on lit paper is gone
+     by nightfall - see `.tile.any`. */
+  border: 1.4px solid #8b9098;
+  border-radius: 10px;
+  background: transparent;
   color: #5b6068;
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 11px;
   text-align: center;
   align-items: center;
   white-space: nowrap;
 }
 
-.knob:hover { background: #f2f3f4; }
+.knob:hover { background: #e0e2e5; }
 
+/* Filled, not shaded. A knob that is ON is the same mark as a ticked effect chip, and the sheet has one way of
+   saying "this is on": the ink filled in. */
 .knob.on {
-  border: 1px solid #8b9098;
-  background: #e0e2e5;
-  color: #23262b;
+  border: 1.2px solid #3a3d42;
+  background: #3a3d42;
+  color: #e9eaec;
 }
 
 /* A tier inside a mod's own section: indented under it, with a rule carrying the count to the edge. */
 .tier {
   flex-direction: row;
   align-items: center;
-  gap: 6px;
-  padding: 6px 2px 2px 14px;
+  gap: 7px;
+  padding: 1px 2px 5px 14px;
 }
 
 .tier-name {
   flex: none;
   font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  color: #8b9098;
+  font-weight: 600;
+  letter-spacing: 1.3px;
+  color: #7b8088;
   white-space: nowrap;
 }
 
@@ -364,7 +376,7 @@ body {
 .tier-count {
   flex: none;
   font-size: 10px;
-  color: #a1a6ad;
+  color: #9aa0a6;
   white-space: nowrap;
 }
 
@@ -378,10 +390,18 @@ body {
   margin-bottom: 7px;
 }
 
+/* Under a tier heading, and lined up with it. The heading is indented 14 and the tiles ARE the group, so they
+   are indented with it - a group whose tiles start left of its own name reads as a heading over nothing. */
+.line.in { margin-left: 14px; }
+
+/*
+  THE SIZE IS NOT HERE. A tile is square, and five of them plus four gaps fill the width of the sheet - which
+  is vanilla's card, a number only the mod can measure. So it is worked out per render in `tileSize()` and
+  written onto the box. Left at a fixed 57 the row came to 313 in a 370 sheet and hung to the left with sixty
+  pixels of bare paper beside it.
+*/
 .tile {
   flex: none;
-  width: 57px;
-  height: 57px;
   border: 1px solid #c6c9cd;
   border-radius: 9px;
   background: #e4e6e8;
@@ -399,9 +419,13 @@ body {
 
    SOLID, THOUGH THE DESIGN ASKS FOR DASHED. `border: 1.6px dashed` drew NOTHING at all here - the Any tile
    came out as a bare X on the paper with no frame round it, while every solid border on the page rendered.
-   The width is not the problem (the search rule is 1.6px and draws); it is the style keyword. */
+   The width is not the problem (the search rule is 1.6px and draws); it is the style keyword.
+
+   DARKER THAN THE DESIGN'S #a9adb4, and every unfilled outline on this page is. The paper is LIT and the ink
+   is not: at noon the sheet renders around 193 and at 4am around 119, so a light grey line that reads on a
+   mock disappears at night while a filled box keeps its shape. Only the fill can afford to be pale. */
 .tile.any {
-  border: 1.6px solid #a9adb4;
+  border: 1.6px solid #9aa0a7;
   background: transparent;
 }
 
@@ -413,7 +437,6 @@ body {
    the vanilla tiles" is. `align-items` alone only settles the cross axis; the column's own axis is
    `justify-content`, and without it the picture hangs from the top whatever the padding says. */
 .shot {
-  height: 55px;
   padding: 2px;
   background: transparent;
   align-items: center;
@@ -428,28 +451,24 @@ body {
 
    `color` on an image TINTS it in this engine, and without one here the picture inherits the pad's ink and
    comes out dark. White is "leave it alone". The square is honest because the mod pads every icon to one
-   before it sends it - a seed vial's own sprite is one to three and would arrive squashed otherwise. */
+   before it sends it - a seed vial's own sprite is one to three and would arrive squashed otherwise.
+
+   Sized in script with the tile it sits in - see `.tile`. */
 .shot-img {
-  width: 51px;
-  height: 51px;
   color: #ffffff;
 }
 
-/* The cross is the letter X. Anything outside Latin-1 comes out as a box in the game's font. */
+/* The cross is the letter X, and it is the whole of the tile: the word under it said "ANY" a second time
+   next to a record on the facing sheet that says it in full. Anything outside Latin-1 comes out as a box in
+   the game's font. */
 .shot-cross {
-  height: 22px;
+  flex: 1;
   font-family: game-hand;
   font-size: 22px;
   color: #8b9098;
   text-align: center;
   align-items: center;
-}
-
-.shot-name {
-  font-size: 9px;
-  letter-spacing: 1px;
-  color: #8b9098;
-  text-align: center;
+  justify-content: center;
 }
 
 /* ---- the star -------------------------------------------------------------------------------------------- */
@@ -547,7 +566,12 @@ body {
 .tip.up { display: flex; }
 .tip.up.on { opacity: 1; }
 
+/* ONE LINE, NOT TWO: the name and the tier stand side by side on the slip, which is what makes it a label
+   rather than a small card. The default flex direction here is column, so a row has to say so. */
 .tip-body {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 7px;
   padding: 4px 10px;
   border-radius: 4px;
   background: #3a3d42;
@@ -558,9 +582,8 @@ body {
    disappears into the same ink - there is no border-triangle trick here, and no z-index to order one with. */
 .tip-arrow {
   position: absolute;
-  /* Level with the middle of the tile: the label's own top is 6 into the line, the tile is 57 tall, and the
-     arrow is 8. */
-  top: 18px;
+  /* Level with the middle of the tile, and written in script because the tile's height is: the label's own top
+     is 6 into the line and the arrow is 8, so the top is half the tile less ten. */
   left: -4px;
   width: 8px;
   height: 8px;
@@ -572,20 +595,22 @@ body {
 .tip.flip .tip-arrow { left: auto; right: -4px; }
 
 .tip-name {
+  flex: 1;
+  min-width: 0;
   font-family: game-hand;
   font-size: 18px;
-  color: #f2f3f4;
+  color: #e9edf5;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .tip-tier {
+  flex: none;
   font-size: 11px;
-  color: #a8adb4;
+  letter-spacing: 1px;
+  color: #a9b4cc;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* ---- the second sheet: the record -------------------------------------------------------------------------- */
@@ -596,20 +621,40 @@ body {
   overflow: auto;
 }
 
+/*
+  THE RESTING BLOCK IS A CARD ON THE SHEET, not the record with a line written over it.
+
+  With nothing hovered the page answers a different question - what is this field set to - and the answer is
+  boxed so it cannot be read as the record of whatever the pointer last touched.
+*/
+.rec-card {
+  flex: none;
+  padding: 14px 16px;
+  border: 1.4px solid #9aa0a7;
+  border-radius: 9px;
+  background: #e4e6e8;
+}
+
+/* Nothing is planted: the same card drawn as an empty frame. Solid, not dashed - see `.tile.any`. */
+.rec-card.any {
+  border: 1.4px solid #9aa0a7;
+  background: transparent;
+}
+
 /* The line printed over the resting state - what the field is set to, rather than what the pointer is on. */
 .rec-head {
   font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 2px;
+  letter-spacing: 1.4px;
   color: #8b9098;
-  margin-bottom: 6px;
 }
 
 .rec-top {
   flex-direction: row;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
 }
+
+.rec-top.spaced { margin-top: 9px; }
 
 /* `color` TINTS a picture in this engine, so white is "leave it alone". The mod pads every icon to a square
    before it sends it, which is why this box can be one. */
@@ -625,7 +670,7 @@ body {
   flex: none;
   width: 56px;
   height: 56px;
-  border: 1.6px solid #a9adb4;
+  border: 1.6px solid #9aa0a7;
   border-radius: 9px;
   font-family: game-hand;
   font-size: 24px;
@@ -643,31 +688,37 @@ body {
 .rec-name {
   font-family: game-hand;
   font-size: 34px;
-  color: #23262b;
+  color: #2b3c66;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+/* In the resting card the name shares the block with the label above it, and is written smaller. */
+.rec-name.small { font-size: 28px; }
+
+/* "Any" is not a name a person wrote down - it is the field left blank, so it is the dim hand. */
+.rec-name.dim { color: #7d89a5; }
+
 .rec-sub {
-  font-size: 11px;
-  letter-spacing: 1px;
-  color: #8b9098;
+  font-size: 14px;
+  color: #6b7079;
 }
 
 .rec-star {
   flex: none;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   color: #e0a72c;
 }
 
-/* Hand-drawn on the mock, a rule here. Same reason as the head rule: a stroke is a sprite, not a glyph. */
+/* Hand-drawn on the mock, a rule here: a stroke is a sprite, not a glyph. This one divides the record itself
+   rather than separating two lists, so it carries ink weight and not a hairline. */
 .rec-rule {
   flex: none;
-  height: 1px;
-  margin: 10px 0 8px 0;
-  background: #bdc1c6;
+  height: 2px;
+  margin: 14px 0 8px 0;
+  background: #3a3d42;
 }
 
 .pill-row {
@@ -677,14 +728,15 @@ body {
   margin-top: 8px;
 }
 
+/* Filled, like a ticked chip: an effect on the record is a fact about the seed, not something to switch. */
 .pill {
   flex: none;
-  height: 18px;
-  padding: 0 8px;
-  border-radius: 9px;
-  background: #e0e2e5;
-  color: #4a4f57;
-  font-size: 10px;
+  height: 21px;
+  padding: 0 10px;
+  border-radius: 12px;
+  background: #3a3d42;
+  color: #e9eaec;
+  font-size: 13px;
   text-align: center;
   align-items: center;
   white-space: nowrap;
@@ -694,30 +746,31 @@ body {
 .cross {
   flex-direction: row;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .parent {
   flex: 1;
   min-width: 0;
-  padding: 6px 8px;
-  border: 1px solid #bdc1c6;
-  border-radius: 4px;
-  background: #e9eaec;
+  padding: 8px 10px;
+  border: 1px solid #b1b6bc;
+  border-radius: 7px;
+  background: #e4e6e8;
 }
 
 .parent-k {
-  font-size: 8px;
-  font-weight: 700;
-  letter-spacing: 1px;
+  font-size: 10px;
+  letter-spacing: 1.2px;
   color: #8b9098;
+  text-align: center;
   white-space: nowrap;
 }
 
 .parent-v {
   font-family: game-hand;
-  font-size: 17px;
-  color: #23262b;
+  font-size: 18px;
+  color: #2b3c66;
+  text-align: center;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -727,8 +780,8 @@ body {
   flex: none;
   width: 14px;
   font-family: game-hand;
-  font-size: 18px;
-  color: #8b9098;
+  font-size: 20px;
+  color: #6b7079;
   text-align: center;
 }
 
@@ -736,31 +789,32 @@ body {
 .cells {
   flex-direction: row;
   align-items: stretch;
-  gap: 6px;
+  gap: 10px;
   margin-top: 10px;
 }
 
 .cell {
   flex: 1;
   min-width: 0;
-  padding: 5px 6px 6px 6px;
-  border: 1px solid #bdc1c6;
-  border-radius: 4px;
+  padding: 9px 8px;
+  border: 1px solid #c2c6cb;
+  border-radius: 7px;
   background: #e0e2e5;
 }
 
 .cell-k {
-  font-size: 8px;
-  font-weight: 700;
-  letter-spacing: 1px;
+  font-size: 10px;
+  letter-spacing: 1.2px;
   color: #8b9098;
+  text-align: center;
   white-space: nowrap;
 }
 
 .cell-v {
   font-family: game-hand;
-  font-size: 21px;
-  color: #23262b;
+  font-size: 22px;
+  color: #2b3c66;
+  text-align: center;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -797,8 +851,9 @@ body {
 .rec-gap {
   flex: 1;
   min-height: 0;
-  color: #8b9098;
-  font-size: 12px;
+  font-family: game-hand;
+  font-size: 19px;
+  color: #7d89a5;
   text-align: center;
   align-items: center;
   justify-content: center;
@@ -815,9 +870,11 @@ body {
   what is NOT in the grid, and a filter that has to be opened to be read is a filter that gets forgotten with
   something still ticked.
 */
+/* The hairline is what docks it: the record above ends where the rule starts, whatever height it came out. */
 .dock {
   flex: none;
-  padding-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid #bdc1c6;
 }
 
 .dock-head {
@@ -829,8 +886,8 @@ body {
 .dock-name {
   flex: none;
   font-family: game-hand;
-  font-size: 19px;
-  color: #23262b;
+  font-size: 16px;
+  color: #3d4f78;
   white-space: nowrap;
 }
 
@@ -843,43 +900,43 @@ body {
 
 .dock-count {
   flex: none;
-  font-size: 10px;
-  letter-spacing: 1px;
+  font-size: 11px;
   color: #8b9098;
   white-space: nowrap;
 }
 
 .dock-rows {
-  gap: 5px;
-  margin-top: 7px;
+  gap: 6px;
+  margin-top: 8px;
 }
 
 .dock-row {
   flex-direction: row;
   align-items: center;
-  gap: 5px;
-  height: 20px;
-  min-height: 20px;
+  gap: 6px;
+  height: 21px;
+  min-height: 21px;
 }
 
 .dchip {
   flex-shrink: 0;
-  height: 20px;
-  padding: 0 9px;
-  border: 1px solid #bdc1c6;
-  border-radius: 10px;
-  background: #e9eaec;
-  color: #4a4f57;
-  font-size: 10px;
+  height: 21px;
+  padding: 0 11px;
+  /* See `.tile.any`: an outline this pale is not there at night. */
+  border: 1.4px solid #8b9098;
+  border-radius: 13px;
+  background: transparent;
+  color: #5b6068;
+  font-size: 13px;
   text-align: center;
   align-items: center;
   white-space: nowrap;
 }
 
-.dchip:hover { background: #f2f3f4; }
+.dchip:hover { background: #e0e2e5; }
 
 .dchip.on {
-  border: 1px solid #3a3d42;
+  border: 1.2px solid #3a3d42;
   background: #3a3d42;
-  color: #f2f3f4;
+  color: #e9eaec;
 }
