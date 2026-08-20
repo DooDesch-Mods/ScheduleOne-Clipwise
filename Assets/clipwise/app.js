@@ -1,5 +1,6 @@
 /*
-  The picker, as a page: vanilla's own seed card, and a narrower second card beside it.
+  The picker, as a pad: vanilla's own seed card is the top sheet, and the next sheet hangs off its perforated
+  edge and lies past the right edge of the board.
 
   Wire format is deliberately flat: `picker.view` answers one JSON object, `picker.pick` takes one item id,
   `picker.fav` stars one, `picker.back` closes without choosing. Everything else - what was typed, which filter
@@ -9,20 +10,29 @@
   both are states this page has to survive: it draws the empty case rather than throwing on JSON.parse.
 
   NO SYMBOL GLYPHS ANYWHERE. Anything outside Latin-1 comes out as a box in the game's font, so a star is a
-  picture and a cross is the letter X.
+  picture, a cross is the letter X and an ellipsis is three full stops.
 
-  TILES, NOT ROWS, because this replaces the game's own seed page and that page is a grid. A tile is seventy
-  pixels wide and holds a picture; everything a row used to say - the parents, the tier, the effects - is on the
-  preview on the facing card, which stays put instead of following the pointer.
+  TILES, NOT ROWS, because this replaces the game's own seed page and that page is a grid. A tile is 57 pixels
+  square and holds a picture; everything a row used to say - the parents, the tier, the effects, the numbers -
+  is on the record on the facing sheet, which stays put instead of following the pointer.
 */
 
 const $ = (id) => document.getElementById(id);
 
+/* The grid, in the numbers the stylesheet uses. They are here as well because the hover label is placed by
+   arithmetic rather than by measurement - see tipLeft. */
 const PER_ROW = 5;
+const TILE = 57;
+const TILE_GAP = 7;
+
+/* The side padding of each page, from app.css. The mod sends the page widths; what is left after the padding
+   is the only width this script can lay anything out against. */
+const PAD_LEFT = 46;    // .page.left  - 20 + 26, the right one clearing the fold and the perforation
+const PAD_RIGHT = 58;   // .page.right - 38 + 20, the left one clearing the other half of the crease
 
 let view = {
-  title: 'Select', tabs: [], rows: [], none: null, added: 'ADDED BY MODS', tags: [],
-  w: 682, h: 620, pageW: 420, pageRW: 252, gap: 10,
+  title: 'Select', tabs: [], rows: [], none: null, added: 'Added by mods', tags: [],
+  w: 840, h: 620, pageW: 420, pageRW: 420, gap: 0,
 };
 
 let query = '';
@@ -30,15 +40,25 @@ let query = '';
 /*
   Filters are independent toggles, not one choice out of a list, because that is what they were before this
   screen was rebuilt: a player who wants their favourites of one tier picks both. `tags` is what the effect
-  ticks on the right card write into.
+  chips in the dock write into.
 */
 let f = { fav: false, hidden: false, vanilla: false, bred: false, fx: [], tags: [] };
 
-/* One chip cycles through these. Index 0 keeps the order the mod supplied, which is the only order that means
-   anything to the mod that supplied it. */
-const SORTS = ['Sort: default', 'Sort: A-Z', 'Sort: yield', 'Sort: growth', 'Sort: value',
-               'Sort: tier up', 'Sort: tier down'];
+/*
+  ONE SORT, AND TIER IS NO LONGER ONE OF ITS MODES.
+
+  Ordering the tier groups and ordering the tiles inside them are two different questions, and as one chip they
+  could not both be answered: picking "tier down" gave up A-Z. So the tier order moved to its own control in
+  the section head and these are what is left. Index 0 keeps the order the mod supplied, which is the only
+  order that means anything to the mod that supplied it.
+*/
+const SORTS = ['Sort: default', 'Sort: A-Z', 'Sort: yield', 'Sort: growth', 'Sort: value'];
 let sort = 0;
+
+/* Tier groups inside a mod's section, and which way round they run. Both are the player's and are kept on the
+   C# side - see remember(). */
+let tierGroups = true;
+let tierDesc = false;
 
 /* Has the opening effect run. False for exactly one render - the one it starts from. */
 let opened = false;
@@ -58,13 +78,23 @@ function load() {
   // Opened the way it was left. These are the player's settings, kept on the mod's side.
   sort = view.sort || 0;
   f.fav = !!view.onlyFav;
+  tierGroups = view.group !== false;
+  tierDesc = !!view.dir;
+
+  // 5 and 6 were "tier up" and "tier down" while the sort chip still owned them. A stored one means the player
+  // asked for a tier order, so it is carried across to the control that owns it now rather than dropped.
+  if (sort === 5) { tierGroups = true; tierDesc = false; sort = 0; }
+  else if (sort === 6) { tierGroups = true; tierDesc = true; sort = 0; }
+  if (sort < 0 || sort >= SORTS.length) sort = 0;
 }
 
-/** Push the three settings that outlive one open back to the mod. */
+/** Push the settings that outlive one open back to the mod. */
 function remember() {
   // The third field is the discovered filter, which this page no longer has - the mod still stores it, so it
   // is sent back unchanged rather than silently turned off for anybody using the other picker.
-  s1.call('picker.state', sort + '|' + (f.fav ? 1 : 0) + '|' + (view.onlyDisc ? 1 : 0));
+  s1.call('picker.state',
+    sort + '|' + (f.fav ? 1 : 0) + '|' + (view.onlyDisc ? 1 : 0)
+    + '|' + (tierGroups ? 1 : 0) + '|' + (tierDesc ? 1 : 0));
 }
 
 /* ---- filtering and sorting ------------------------------------------------------------------------------ */
@@ -112,10 +142,14 @@ function compare(a, b) {
     case 2: r = (b.yield || 0) - (a.yield || 0); break;          // biggest first
     case 3: r = (a.growth || 0) - (b.growth || 0); break;        // fastest first
     case 4: r = (b.value || 0) - (a.value || 0); break;          // most valuable first
-    case 5: r = (a.tier || 0) - (b.tier || 0); break;
-    case 6: r = (b.tier || 0) - (a.tier || 0); break;
   }
   return r !== 0 ? r : byName(a, b);
+}
+
+/** First letter up, and nothing else touched. */
+function cap(text) {
+  const s = String(text || '');
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
 
 function el(kind, cls, text) {
@@ -125,51 +159,54 @@ function el(kind, cls, text) {
   return node;
 }
 
-/* ---- the two cards -------------------------------------------------------------------------------------- */
+function img(cls, src) {
+  const node = document.createElement('img');
+  node.className = cls;
+  node.src = src;
+  return node;
+}
+
+/* ---- the two pages --------------------------------------------------------------------------------------- */
 
 /*
   The page is told how big it is, because it cannot ask.
 
   A surface answers layout coordinates and nothing about the viewport, so "how wide is half of me" has no answer
   here. The mod measured vanilla's own card in `SurfacePicker.Fit` and sent the numbers along, and this is where
-  they land on the boxes. The right card is never wider or taller than the left - that ceiling is applied on the
-  C# side, where the measuring happens, so there is one place it can be got wrong.
+  they land on the boxes. The two are equal by construction - the second sheet is the same sheet of paper - and
+  that ceiling is applied on the C# side, where the measuring happens, so there is one place it can be got wrong.
 */
 function shell() {
   const left = Math.round(view.pageW || 420);
-  const right = Math.round(view.pageRW || Math.round(left * 0.6));
-  const gap = Math.round(view.gap || 10);
+  const right = Math.round(view.pageRW || left);
 
   $('pageL').style.width = left + 'px';
   $('pageR').style.width = right + 'px';
-  $('gap').style.width = gap + 'px';
 }
 
-/** How much room a chip row has: the left card, less its own side padding. */
-function chipRoom() {
-  return Math.round(view.pageW || 420) - 40;
+/** What is left of the top sheet after its own padding: the width everything on it is laid out against. */
+function leftRoom() {
+  return Math.round(view.pageW || 420) - PAD_LEFT;
+}
+
+/** The same for the facing sheet. */
+function rightRoom() {
+  return Math.round(view.pageRW || view.pageW || 420) - PAD_RIGHT;
 }
 
 /* ---- the filter chips ------------------------------------------------------------------------------------ */
 
 /*
-  FIXED CHIPS FOR THE SWITCHES. The lists - one per tag group a mod declared - are the ticks on the right card
-  now, where they can all be read at once instead of hiding behind a chip.
-
-  There is no `Discovered` chip. Only discovered seeds reach this page at all, so it was a filter that never
-  removed anything.
-
   CHIP WIDTHS ARE ESTIMATED, NOT MEASURED, and that is the only option here. There is no flex-wrap in this
-  engine, so a row of chips either runs off the card or gets chunked in script - and chunking needs to know how
+  engine, so a row of chips either runs off the sheet or gets chunked in script - and chunking needs to know how
   wide each chip will be BEFORE it is laid out. `el.rect()` reports the last render, which is a frame too late.
-  Seven per em plus the padding matches the card's font closely enough that a row breaks one chip early at
-  worst, and one chip early is invisible while one chip late is a word sliced in half at the edge of the
-  clipboard.
+  Six per em plus the padding matches the sheet's font closely enough that a row breaks one chip early at
+  worst, and one chip early is invisible while one chip late is a word sliced in half at the edge of the board.
 */
-const CHIP_PAD = 22;      // the chip's own padding, both sides
+const CHIP_PAD = 22;
 
 function chipWidth(label) {
-  return Math.round(String(label).length * 7) + CHIP_PAD;
+  return Math.round(String(label).length * 6.2) + CHIP_PAD;
 }
 
 function chip(row, label, on, act) {
@@ -191,23 +228,30 @@ function renderChips() {
 
     Vanilla and Bred were never independent - turning one on turned the other off - so as two buttons they
     spent a chip's worth of room on a choice that only ever has one answer at a time. One chip, cycling
-    all -> vanilla -> bred, labelled with the state it is in - the way the sort chip already worked.
+    all -> vanilla -> bred, labelled with the state it is in.
   */
   chip(wanted, f.vanilla ? 'Vanilla' : f.bred ? 'Bred' : 'All', f.vanilla || f.bred, () => {
     if (f.vanilla) { f.vanilla = false; f.bred = true; }
     else if (f.bred) { f.bred = false; }
     else { f.vanilla = true; }
   });
+
+  // What the dock has ticked, said on the sheet the player is looking at. Clicking it clears them, which is the
+  // only thing this chip could usefully do that the dock does not already do better.
+  const ticked = f.fx.length + f.tags.length;
+  if (ticked) {
+    chip(wanted, 'Effects ' + ticked, true, () => { f.fx.length = 0; f.tags.length = 0; });
+  }
+
   if (view.hiddenCount || f.hidden) {
     chip(wanted, 'Hidden (' + (view.hiddenCount || 0) + ')', f.hidden, () => { f.hidden = !f.hidden; });
   }
-  chip(wanted, SORTS[sort] || SORTS[0], sort !== 0, () => { sort = (sort + 1) % SORTS.length; remember(); });
 
   // Only when something is actually on. A button that does nothing is worse than no button.
-  if (f.fav || f.vanilla || f.bred || f.fx.length || f.tags.length || query || sort !== 0) {
+  if (f.fav || f.vanilla || f.bred || ticked || query || sort !== 0) {
     chip(wanted, 'Clear', false, () => {
-      // Emptied in place rather than replaced: `tickDefs` hands each tick the array it writes into, and a
-      // fresh array would leave the ticks of this render pointing at the old one.
+      // Emptied in place rather than replaced: the dock hands each chip the array it writes into, and a fresh
+      // array would leave the chips of this render pointing at the old one.
       f.fav = false; f.vanilla = false; f.bred = false; f.fx.length = 0; f.tags.length = 0;
       sort = 0;
       query = '';
@@ -216,7 +260,7 @@ function renderChips() {
     });
   }
 
-  const room = chipRoom();
+  const room = leftRoom();
   let row = null;
   let used = 0;
   for (const one of wanted) {
@@ -230,7 +274,7 @@ function renderChips() {
   }
 }
 
-/* ---- the effect filters ---------------------------------------------------------------------------------- */
+/* ---- the dock: effect filters ------------------------------------------------------------------------------ */
 
 /** The tag groups a mod declared, as `prefix -> [tag]`, so `mod:effect/calming` becomes the "effect" list. */
 function groups() {
@@ -249,15 +293,8 @@ function groups() {
   return out;
 }
 
-/** There is no flex-wrap in this engine, so the lines are made rather than found. How many fit is a question
-    about the right card, which is the only box whose width this page is told. */
-function ticksPerRow() {
-  const room = Math.round(view.pageRW || 252) - 40;
-  return room >= 300 ? 3 : room >= 190 ? 2 : 1;
-}
-
 /*
-  WHAT THE TICKS ARE, AND WHY THEY ARE NOT ONLY THE MOD'S TAGS.
+  WHAT THE CHIPS ARE, AND WHY THEY ARE NOT ONLY THE MOD'S TAGS.
 
   The drop-down this replaces was built from `view.tags` - the tags a MOD declared - so on a save with no
   strain catalogue installed the whole filter had nothing in it and hid itself. That is a filter that only
@@ -267,7 +304,7 @@ function ticksPerRow() {
   So the list is the union of the effects the rows actually have, and then any other group a mod declared
   after it. Nothing is invented and nothing is asked for over the bridge - both halves are already on the row.
 */
-function tickDefs() {
+function filterDefs() {
   const out = [];
 
   const names = [];
@@ -275,14 +312,25 @@ function tickDefs() {
     for (const e of row.effects || []) if (names.indexOf(e) < 0) names.push(e);
   }
   names.sort((a, b) => a.toLowerCase() < b.toLowerCase() ? -1 : 1);
-  for (const name of names) out.push({ key: 'fx:' + name, label: name, list: f.fx, value: name });
+  // Capitalised for the chip only. The game's own effect names arrive lowercase and a mod's tag labels do not,
+  // so a dock built straight off the data read "calming, energizing, Refreshing, Sedating" - one filter, two
+  // spellings. The value that is filtered on is untouched.
+  for (const name of names) out.push({ key: 'fx:' + name, label: cap(name), list: f.fx, value: name });
 
-  // Whatever else a mod files - a "flavour" group, a "source" group - gets its ticks under the effects rather
-  // than being dropped for not being the group this card was drawn for.
+  // Whatever else a mod files - a "flavour" group, a "source" group - gets its chip under the effects rather
+  // than being dropped for not being the group this sheet was drawn for.
   for (const [name, list] of groups()) {
-    if (name === 'tier') continue;   // tier is what the sort chip does, and having it twice is a filter fighting itself
+    if (name === 'tier') continue;   // tier is what the section head does, and having it twice is a filter fighting itself
     for (const t of list) {
       if (out.some((x) => x.key === 'tag:' + t.id)) continue;
+
+      // A mod that tags its own strains "Calming" while the game already reports the effect "calming" was
+      // getting TWO chips for one question, and ticking either of them answered it. The mod's spelling is the
+      // nicer one, so it wins the label; the filter stays on the effect, which is the half that also works for
+      // a vanilla seed.
+      const same = out.find((x) => x.label.toLowerCase() === String(t.label).toLowerCase());
+      if (same) { same.label = cap(t.label); continue; }
+
       out.push({ key: 'tag:' + t.id, label: t.label, list: f.tags, value: t.id });
     }
   }
@@ -290,47 +338,60 @@ function tickDefs() {
   return out;
 }
 
-function renderTicks() {
+function dchipWidth(label) {
+  return Math.round(String(label).length * 5.6) + 20;
+}
+
+function renderDock() {
   const box = $('fx');
   box.replaceChildren();
 
-  const defs = tickDefs();
+  const defs = filterDefs();
   if (defs.length === 0) { box.style.display = 'none'; return; }
   box.style.display = 'flex';
 
-  const per = ticksPerRow();
-  let line = null;
-  defs.forEach((def, i) => {
-    if (i % per === 0) {
-      line = el('div', 'fx-row');
-      box.appendChild(line);
-    }
+  const on = f.fx.length + f.tags.length;
 
-    const on = def.list.indexOf(def.value) >= 0;
-    const node = el('button', 'tick' + (on ? ' on' : ''));
-    node.appendChild(el('span', 'tick-box', on ? 'x' : ''));
-    node.appendChild(el('span', 'tick-name', def.label));
+  const head = el('div', 'dock-head');
+  head.appendChild(el('div', 'dock-name', 'Filter by effect'));
+  head.appendChild(el('div', 'dock-fill'));
+  head.appendChild(el('div', 'dock-count', on ? on + ' ON' : ''));
+  box.appendChild(head);
+
+  const rows = el('div', 'dock-rows');
+  box.appendChild(rows);
+
+  // There is no flex-wrap in this engine, so the rows are made rather than found.
+  const room = rightRoom();
+  let line = null;
+  let used = 0;
+  for (const def of defs) {
+    const lit = def.list.indexOf(def.value) >= 0;
+    const node = el('button', 'dchip' + (lit ? ' on' : ''), def.label);
     node.addEventListener('click', () => {
       const at = def.list.indexOf(def.value);
       if (at >= 0) def.list.splice(at, 1); else def.list.push(def.value);
       render();
     });
-    line.appendChild(node);
-  });
 
-  // The last line is short, and a stretched tick would be a different width from the rest.
-  if (line) {
-    for (let i = defs.length % per; i > 0 && i < per; i++) line.appendChild(el('div', 'tick'));
+    const w = dchipWidth(def.label);
+    if (!line || used + w > room) {
+      line = el('div', 'dock-row');
+      rows.appendChild(line);
+      used = 0;
+    }
+    line.appendChild(node);
+    used += w + 5;
   }
 }
 
-/* ---- the hover preview ----------------------------------------------------------------------------------- */
+/* ---- the record on the facing sheet ------------------------------------------------------------------------ */
 
 /*
-  Which row the preview is showing. Not bookkeeping - it is what stops the page rebuilding forever.
+  Which row the record is showing. Not bookkeeping - it is what stops the page rebuilding forever.
 
   Every DOM write rebuilds the page, and a rebuild destroys and recreates every box on it. The pointer has not
-  moved, but the box under it is a NEW object, so uGUI raises its enter again, which fills the preview, which
+  moved, but the box under it is a NEW object, so uGUI raises its enter again, which fills the record, which
   writes to the DOM, which rebuilds. A probe listener counted about ten of those rounds a second with the
   pointer standing still.
 
@@ -343,18 +404,22 @@ function renderTicks() {
 */
 let shown = null;
 
-/* Whose tooltip has already faded up. See `fillTip` - it is what stops the fade restarting itself. */
+/** The Any tile has no row of its own, so it points at this. Compared by identity, never by id. */
+const ANY = { id: ' any', name: 'Any' };
+
+/* Whose label has already faded up. See `fillTip` - it is what stops the fade restarting itself. */
 let faded = null;
 
-function showPreview(row) {
+function showRecord(row) {
+  if (shown === row) return;
   if (shown && row && shown.id === row.id) return;
   shown = row;
   faded = null;
   render();
 }
 
-/** One "LABEL  value" line, and only when there is a value. A card that promises a field and shows nothing
-    under it is worse than a shorter card. */
+/** One "LABEL value" line, and only when there is a value. A record that promises a field and shows nothing
+    under it is worse than a shorter record. */
 function fact(box, key, value) {
   if (value === null || value === undefined || value === '') return;
   const line = el('div', 'fact');
@@ -369,72 +434,167 @@ function money(n) {
   return '$' + (Math.round(v * 100) / 100);
 }
 
-/*
-  The sentence over the table.
-
-  Built from what the mod actually sent - the parents, the tier and the number of effects on the plant - and
-  never from a rule about what a tier ought to mean. Every clause drops out on its own when its fact is missing,
-  so a vanilla seed with no parents gets a shorter line rather than a line with a hole in it.
-*/
-function prose(row) {
-  const bits = [];
-  if (row.note) bits.push('Root from ' + row.note + '.');
-
-  const effects = (row.effects || []).length;
-  if (row.tier && effects) bits.push('Tier ' + row.tier + ', ' + effects + (effects === 1 ? ' effect' : ' effects') + ' straight off the plant.');
-  else if (row.tier) bits.push('Tier ' + row.tier + '.');
-  else if (effects) bits.push(effects + (effects === 1 ? ' effect' : ' effects') + ' straight off the plant.');
-
-  return bits.join(' ');
+function hours(n) {
+  const v = Number(n) || 0;
+  return v > 0 && v < 2000000000 ? v + 'h' : '';
 }
 
-function renderPreview() {
-  const box = $('preview');
+/** "Tier 4 - Breed to Seed Strains", or whichever half of it exists. */
+function subLine(row) {
+  const bits = [];
+  if (row.tier) bits.push('Tier ' + row.tier);
+
+  // The category the registering mod NAMED, not its assembly id: `source` is `doodesch.breedtoseed`, and
+  // "Breed to Seed Strains" is what that mod calls its own shelf on this very page.
+  const from = row.vanilla ? '' : tabLabel(row.tab || '');
+  if (from) bits.push(from);
+  else if (row.source) bits.push(String(row.source));
+
+  return bits.join(' - ');
+}
+
+/** One line of facts for the resting state - what the field holds, without the full record. */
+function restLine(row) {
+  const bits = [];
+  if (row.tier) bits.push('Tier ' + row.tier);
+  const n = (row.effects || []).length;
+  if (n) bits.push(n + (n === 1 ? ' effect' : ' effects'));
+  if (row.yield) bits.push(row.yield + (row.harvest ? ' ' + row.harvest : ''));
+  const v = money(row.value);
+  if (v) bits.push(v);
+  return bits.join(' - ');
+}
+
+/** The vial, or the dashed frame with the letter in it when there is no item to show a picture of. */
+function budNode(row, any) {
+  if (any) return el('div', 'rec-any', 'X');
+  return img('rec-bud', 's1://icon/' + row.id);
+}
+
+/** The head block every state shares: picture, name, one line under it. */
+function recTop(box, row, any, sub) {
+  const top = el('div', 'rec-top');
+  top.appendChild(budNode(row, any));
+
+  const id = el('div', 'rec-id');
+  id.appendChild(el('div', 'rec-name', any ? (row && row.name) || 'Any' : (row.name || row.id)));
+  if (sub) id.appendChild(el('div', 'rec-sub', sub));
+  top.appendChild(id);
+
+  if (!any && row.fav) top.appendChild(img('rec-star', 'star.png'));
+
+  box.appendChild(top);
+  return top;
+}
+
+/** The two parents of a cross, as the mod wrote them: "A x B". A vanilla seed has no note and gets no cells. */
+function crossNode(box, note) {
+  if (!note) return;
+
+  const parts = String(note).split(/\s+[xX]\s+/);
+  if (parts.length !== 2) { fact(box, 'CROSS', note); return; }
+
+  const row = el('div', 'cross');
+
+  const a = el('div', 'parent');
+  a.appendChild(el('div', 'parent-k', 'PARENT'));
+  a.appendChild(el('div', 'parent-v', parts[0]));
+  row.appendChild(a);
+
+  row.appendChild(el('div', 'cross-x', 'x'));
+
+  const b = el('div', 'parent');
+  b.appendChild(el('div', 'parent-k', 'PARENT'));
+  b.appendChild(el('div', 'parent-v', parts[1]));
+  row.appendChild(b);
+
+  box.appendChild(row);
+}
+
+/** BUDS / TIME / VALUE / TIER, in four equal cells. A cell with no number says so with a dash rather than
+    disappearing - four cells that move about are harder to read than one that is empty. */
+function cellsNode(box, row) {
+  const cells = el('div', 'cells');
+
+  const four = [
+    ['BUDS', row.yield ? String(row.yield) : '-'],
+    ['TIME', hours(row.growth) || '-'],
+    ['VALUE', money(row.value) || '-'],
+    ['TIER', row.tier ? String(row.tier) : '-'],
+  ];
+
+  for (const [k, v] of four) {
+    const cell = el('div', 'cell');
+    cell.appendChild(el('div', 'cell-k', k));
+    cell.appendChild(el('div', 'cell-v', v));
+    cells.appendChild(cell);
+  }
+
+  box.appendChild(cells);
+}
+
+function renderSheet() {
+  const box = $('sheet');
   box.replaceChildren();
 
-  const row = shown;
-  if (!row) {
-    box.appendChild(el('div', 'pv-empty', 'Point at a seed to read it here.'));
+  // ---- hovered: the full record of whatever the pointer is on
+  if (shown && shown !== ANY) {
+    const row = shown;
+    recTop(box, row, false, subLine(row));
+
+    // Chunked in script like every other row of things on this page: there is no flex-wrap here, and a strain
+    // with eight effects would otherwise run off the sheet and be clipped without a mark to say so.
+    if (row.effects && row.effects.length) {
+      const room = rightRoom();
+      let line = null;
+      let used = 0;
+      for (const e of row.effects) {
+        const w = dchipWidth(e);
+        if (!line || used + w > room) {
+          line = el('div', 'pill-row');
+          box.appendChild(line);
+          used = 0;
+        }
+        line.appendChild(el('span', 'pill', cap(e)));
+        used += w + 5;
+      }
+    }
+
+    box.appendChild(el('div', 'rec-rule'));
+
+    crossNode(box, row.note);
+    cellsNode(box, row);
+
+    // The rest of what is known, under the numbers rather than instead of them. Same rule as ever: no value,
+    // no row - and whatever the registering mod answered goes last, so it cannot push the game's own facts off
+    // the top of the sheet.
+    fact(box, 'PRODUCT', row.product);
+    fact(box, 'TYPE', row.drug);
+    fact(box, 'BUY', money(row.buy));
+    if (row.disc === false) fact(box, 'DISCOVERED', 'not yet');
+    for (const extra of row.facts || []) fact(box, extra.k, extra.v);
     return;
   }
 
-  const top = el('div', 'pv-top');
-  const head = el('div', 'pv-head');
-  head.appendChild(el('div', 'pv-name', row.name || row.id));
+  // ---- resting, and the Any state, which is the same block with a dashed frame instead of a picture
+  //
+  // Resting says what the FIELD holds, not what the pointer last touched: with nothing hovered the useful
+  // question is "what is this pot set to", and the answer was previously nowhere on the screen.
+  const sel = selected();
+  const isAny = shown === ANY || !sel;
+  const row = isAny ? { name: (view.none && view.none.name) || 'Any' } : sel;
 
-  const line = prose(row);
-  if (line) head.appendChild(el('div', 'pv-prose', line));
-  top.appendChild(head);
+  box.appendChild(el('div', 'rec-head', (view.title || 'This field').toUpperCase() + ' IS SET TO'));
+  recTop(box, row, isAny, isAny ? '' : restLine(row));
 
-  // The item's own picture, the same one its tile carries - so the bud on the card is the bud in hand.
-  const bud = document.createElement('img');
-  bud.className = 'pv-bud';
-  bud.src = 's1://icon/' + row.id;
-  top.appendChild(bud);
-  box.appendChild(top);
+  box.appendChild(el('div', 'rec-gap', 'Point at a seed to read it here.'));
+}
 
-  if (row.fav) box.appendChild(el('div', 'pv-badge', 'FAVOURITE'));
-
-  box.appendChild(el('div', 'pv-rule'));
-
-  // Who filed this entry. Only for something a mod claimed - the game's own seeds need no credit line.
-  if (row.source) box.appendChild(el('div', 'pv-src', String(row.source).toUpperCase()));
-
-  fact(box, 'CROSS', row.note);
-  fact(box, 'TIER', row.tier ? row.tier : '');
-  if (row.effects && row.effects.length) fact(box, 'EFFECTS', row.effects.join(', ') + ' (' + row.effects.length + ')');
-  fact(box, 'YIELD', row.yield ? row.yield + (row.harvest ? ' ' + row.harvest : '') : '');
-  fact(box, 'GROWTH', row.growth && row.growth < 2000000000 ? row.growth + ' h' : '');
-  fact(box, 'PRODUCT', row.product);
-  fact(box, 'TYPE', row.drug);
-  fact(box, 'VALUE', money(row.value));
-  fact(box, 'BUY', money(row.buy));
-  if (row.disc === false) fact(box, 'DISCOVERED', 'not yet');
-
-  // Whatever the registering mod answered for this item just now - a discoverer's alias, a trait, anything it
-  // knows and this page does not. Last, so a mod cannot push the game's own facts off the top of the card, and
-  // every one of them is subject to the same rule as the rest: no value, no row.
-  for (const extra of row.facts || []) fact(box, extra.k, extra.v);
+/** The row the field is set to, or null. Off the whole list, not the filtered one: what a field holds does not
+    stop being true because a filter is on. */
+function selected() {
+  for (const row of view.rows || []) if (row.sel) return row;
+  return null;
 }
 
 /* ---- the grid -------------------------------------------------------------------------------------------- */
@@ -449,38 +609,48 @@ function renderPreview() {
 */
 $('rows').addEventListener('click', (e) => {
   const on = e && e.target ? String(e.target.className || '') : '';
-  if (on.indexOf('shot-item') >= 0 || on.indexOf('star') >= 0 || on.indexOf('hide') >= 0) return;
+  // The controls that live INSIDE the list are not strays: the section heads sit in the scroll area with the
+  // tiles, so a knob press bubbles to here and was being reported as a click that hit nothing.
+  if (on.indexOf('shot-item') >= 0 || on.indexOf('star') >= 0 || on.indexOf('hide') >= 0
+      || on.indexOf('knob') >= 0) return;
   s1.call('picker.stray', on || '(unnamed)');
 });
 
 /*
-  THE TOOLTIP.
+  THE HOVER LABEL.
 
-  148 AND NOT MORE, because the width decides whether it can stand BESIDE its tile at all. A line is 380 wide
-  and a tile 71. At 168 the middle column had room on neither side and the tooltip ended up drawn over the very
-  seed the pointer was on. 148 is the widest that still leaves room on one side of every one of the five
-  columns.
+  WIDTH IS THE CONTENT'S NOW, AND CAPPED. A fixed 148 was wide enough for a long name and far too wide for a
+  short one, and on this pad there is a hard edge to respect: the label must never reach the fold. So it is
+  estimated from the text - there is nothing to measure before a render - and then clamped to the room that is
+  actually left on the side it stands on.
 
   WHICH SIDE IS DECIDED BY THE COLUMN, not by measuring. The old code took `anchor.rect()` minus `line.rect()`,
   because the difference between two rects inside the same scrolled box cancels the scroll offset a surface
   cannot read. Inside the line there is nothing left to measure at all: the column number says where the tile
-  starts, and whether there is room to its right.
+  starts, and whether there is room to its right. On the last two columns it flips to the left.
 
-  THE NAME, AND NOTHING ELSE. The tile shows a picture and no words, so the name is the one thing the pointer
-  cannot already see; the cross, the tier, the effects and every number are on the preview on the facing card,
-  which is filled by the same hover and stays put afterwards. A second line here would cover the tile below it
-  to repeat something already on screen.
+  AT FIVE COLUMNS IT COVERS THE TWO TILES BESIDE IT, stars and all. That is accepted rather than worked around:
+  the label answers "which one is this" for the tile under the pointer, and the record on the facing sheet
+  carries everything else about it.
 */
-const TIP_WIDTH = 148;
 const TIP_GAP = 6;
+const TIP_MIN = 74;
 
-/** Where a line's tooltip stands, measured across the line. */
-function tipLeft(col) {
-  // The tile's own width, from the numbers the mod sent: the card's content width less the four gaps, over five.
-  const tileW = Math.round((chipRoom() - (PER_ROW - 1) * 6) / PER_ROW);
-  const x = col * (tileW + 6);
-  // The last column has no room to its right, and a tooltip that ran off the end would be cut off by the list.
-  return col >= PER_ROW - 1 ? x - TIP_WIDTH - TIP_GAP : x + tileW + TIP_GAP;
+function tipX(col) {
+  return col * (TILE + TILE_GAP);
+}
+
+/** How wide the label may be at this column, on the side it will stand. */
+function tipRoom(col, flip) {
+  return flip ? tipX(col) - TIP_GAP : leftRoom() - (tipX(col) + TILE + TIP_GAP);
+}
+
+/** Estimated, because nothing can be measured before it is drawn: the hand at 18px runs about 7.6 px a letter,
+    the printed tier line about 5.6. */
+function tipWidth(name, tier) {
+  const a = String(name || '').length * 7.6;
+  const b = String(tier || '').length * 5.6;
+  return Math.round(Math.max(a, b)) + 20;
 }
 
 function lineNode() {
@@ -498,46 +668,67 @@ function lineNode() {
   before they let go and no click was ever raised. Nothing appeared in the log either, because there was no
   click to log.
 
-  An empty tooltip is absolutely placed and fully transparent, so it costs no room and draws nothing.
+  An empty label is absolutely placed and fully transparent, so it costs no room and draws nothing.
 
   LAST IN THE LINE, AND THAT IS NOT TIDINESS. There is no z-index in this engine and paint order is document
-  order, so a tooltip written before the tiles is painted UNDERNEATH them: the only part of it that showed was
-  the six-pixel gap between two tiles, which reads exactly like a tooltip that is drawn far too narrow. It is
-  appended once the line's tiles are in, which is still a build-time decision and never a hover-time one.
+  order, so a label written before the tiles is painted UNDERNEATH them: the only part of it that showed was
+  the seven-pixel gap between two tiles, which reads exactly like a label drawn far too narrow. It is appended
+  once the line's tiles are in, which is still a build-time decision and never a hover-time one.
+
+  THE ARROW IS LAST INSIDE THE LABEL, for the same reason: it is the same ink as the body and the half that
+  overlaps it has to be painted over it.
 */
 function tipNode() {
-  return el('div', 'tip');
+  const tip = el('div', 'tip');
+  const body = el('div', 'tip-body');
+  body.appendChild(el('div', 'tip-name', ''));
+  body.appendChild(el('div', 'tip-tier', ''));
+  tip.appendChild(body);
+  tip.appendChild(el('div', 'tip-arrow'));
+  return tip;
 }
 
 /*
-  THREE PROPERTY WRITES ON A NODE THAT IS ALREADY THERE: the text, the offset, and the class that fades it up.
+  TEXT AND OFFSETS ON NODES THAT ARE ALREADY THERE. Nothing is created and nothing is removed.
 
   THE FADE IS THE ONE WRITE THAT IS NOT PART OF A RENDER, and it is bounded on purpose. A transition needs the
   SAME element to change, so a rebuild cannot carry one - the class has to be set on the node that is already
-  there. `faded` is what makes that safe: if the class change does rebuild the page, the tooltip comes back
+  there. `faded` is what makes that safe: if the class change does rebuild the page, the label comes back
   already lit and schedules nothing, so the worst case is one extra rebuild and a fade that is cut short, never
   a loop.
 */
 function fillTip(node, row, col) {
   if (!node) return;
 
-  node.textContent = row.name || row.id;
-  node.style.left = tipLeft(col) + 'px';
-  node.style.width = TIP_WIDTH + 'px';
+  const name = row.name || row.id;
+  const tier = row.tier ? 'Tier ' + row.tier : '';
 
-  const up = faded === row.id;
-  node.className = 'tip' + (up ? ' on' : '');
-  if (up) return;
+  const body = node.children[0];
+  body.children[0].textContent = name;
+  body.children[1].textContent = tier;
+
+  const flip = col >= PER_ROW - 2;
+  const width = Math.max(TIP_MIN, Math.min(tipWidth(name, tier), tipRoom(col, flip)));
+
+  node.style.width = width + 'px';
+  node.style.left = (flip ? tipX(col) - width - TIP_GAP : tipX(col) + TILE + TIP_GAP) + 'px';
+
+  // `up` is what makes the label exist at all; `on` is what fades it in. Both are class writes on a node that
+  // is already there - see tipNode.
+  const base = 'tip up' + (flip ? ' flip' : '');
+  const lit = faded === row.id;
+  node.className = base + (lit ? ' on' : '');
+  if (lit) return;
 
   setTimeout(() => {
     if (!shown || shown.id !== row.id || faded === row.id) return;
     faded = row.id;
-    node.className = 'tip on';
+    node.className = base + ' on';
   }, 0);
 }
 
-/** One tile: the seed's own picture and its star. Pointing at it fills the preview on the facing card and the
-    tooltip on its own line. */
+/** One tile: the seed's own picture and its star. Pointing at it fills the record on the facing sheet and the
+    label on its own line. */
 function tileNode(row) {
   const tile = el('div', 'tile' + (row.sel ? ' sel' : ''));
 
@@ -547,29 +738,23 @@ function tileNode(row) {
   // drawn FIRST, so `sideload_click .shot` clears the field instead of choosing anything - which reads exactly
   // like the click being broken, and cost a whole diagnosis round.
   const pick = el('button', 'shot shot-item');
-  const shot = document.createElement('img');
-  shot.className = 'shot-img';
   // Supplied by the mod at open time, off the LIVE item definition - which is what lets a mod that tints a seed
   // per strain have every vial on the grid look like itself.
-  shot.src = 's1://icon/' + row.id;
-  pick.appendChild(shot);
+  pick.appendChild(img('shot-img', 's1://icon/' + row.id));
   pick.addEventListener('click', () => s1.call('picker.pick', row.id));
-  pick.addEventListener('mouseenter', () => showPreview(row));
+  pick.addEventListener('mouseenter', () => showRecord(row));
   tile.appendChild(pick);
 
   const star = el('button', 'star' + (row.fav ? ' on' : ''));
-  const glyph = document.createElement('img');
-  glyph.className = 'star-img';
-  glyph.src = 'star.png';
-  star.appendChild(glyph);
+  star.appendChild(img('star-img', 'star.png'));
   star.addEventListener('click', () => {
     row.fav = s1.call('picker.fav', row.id) === 'on';
     render();
   });
   tile.appendChild(star);
 
-  // Only while the Hidden chip is on. A tile is seventy pixels wide and cannot carry two permanent buttons, and
-  // hiding things is a tidying-up job rather than something done in passing.
+  // Only while the Hidden chip is on. A tile is fifty-seven pixels wide and cannot carry two permanent buttons,
+  // and hiding things is a tidying-up job rather than something done in passing.
   if (f.hidden) {
     const hide = el('button', 'hide' + (row.hidden ? ' on' : ''), row.hidden ? 'o' : 'x');
     hide.addEventListener('click', () => {
@@ -588,7 +773,7 @@ function grid(box, rows) {
   let line = null;
   let tip = null;
 
-  // The tooltip goes in once the line's tiles are - see tipNode for why it cannot go in first.
+  // The label goes in once the line's tiles are - see tipNode for why it cannot go in first.
   const close = () => { if (line && tip) line.appendChild(tip); };
 
   rows.forEach((row, i) => {
@@ -601,8 +786,8 @@ function grid(box, rows) {
     }
     line.appendChild(tileNode(row));
 
-    // The line's own tooltip, filled only for the seed the pointer is on.
-    if (view.tips !== false && shown && shown.id === row.id) fillTip(tip, row, col);
+    // The line's own label, filled only for the seed the pointer is on.
+    if (view.tips !== false && shown && shown !== ANY && shown.id === row.id) fillTip(tip, row, col);
   });
 
   // The last line is short, and a stretched tile would be a different size from the rest of the grid.
@@ -613,23 +798,100 @@ function grid(box, rows) {
   close();
 }
 
+/* ---- the sections ---------------------------------------------------------------------------------------- */
+
+/** The label a mod's own category carries, or the one the mod sent for "everything added". */
+function tabLabel(key) {
+  for (const tab of view.tabs || []) if (tab.id === key) return tab.label;
+  return view.added || 'Added by mods';
+}
+
+/** The tier control cycles all three states, so both values it writes have a control that can reach them. */
+function tierKnob(head) {
+  const label = !tierGroups ? 'No tiers' : tierDesc ? 'Tier down' : 'Tier up';
+  const knob = el('button', 'knob' + (tierGroups ? ' on' : ''), label);
+  knob.addEventListener('click', () => {
+    if (!tierGroups) { tierGroups = true; tierDesc = false; }
+    else if (!tierDesc) { tierDesc = true; }
+    else { tierGroups = false; tierDesc = false; }
+    remember();
+    render();
+  });
+  head.appendChild(knob);
+}
+
+/** Orders the tiles inside every group. Independent of the tier control on purpose - both can be set at once. */
+function sortKnob(head) {
+  const knob = el('button', 'knob' + (sort !== 0 ? ' on' : ''), SORTS[sort] || SORTS[0]);
+  knob.addEventListener('click', () => {
+    sort = (sort + 1) % SORTS.length;
+    remember();
+    render();
+  });
+  head.appendChild(knob);
+}
+
+/** A section head: the name in the hand, the two ordering controls, and the count on the far side. */
+function sectionHead(box, name, count, withTier) {
+  const head = el('div', 'section');
+  head.appendChild(el('div', 'section-name', name));
+  if (withTier) tierKnob(head);
+  sortKnob(head);
+  head.appendChild(el('div', 'section-fill'));
+  head.appendChild(el('div', 'section-count', String(count)));
+  box.appendChild(head);
+}
+
+/** The tiers actually present in a set of rows, in the order the tier control asks for. */
+function tiersOf(rows) {
+  const tiers = [];
+  for (const row of rows) if (tiers.indexOf(row.tier || 0) < 0) tiers.push(row.tier || 0);
+  tiers.sort((a, b) => (tierDesc ? b - a : a - b));
+  return tiers;
+}
+
+/** One mod's section: its heading, then a group per tier that is actually in the list. */
+function modSection(box, key, rows) {
+  const tiers = tiersOf(rows);
+  sectionHead(box, tabLabel(key), rows.length, tierGroups && tiers.length > 1);
+
+  if (!tierGroups) { grid(box, rows); return; }
+
+  for (const tier of tiers) {
+    const group = rows.filter((row) => (row.tier || 0) === tier);
+
+    // A tier nobody has reached yet must not announce itself by having an empty heading - and an untagged
+    // item has no tier to head at all, so it simply follows the last group.
+    if (tier > 0) {
+      const head = el('div', 'tier');
+      head.appendChild(el('div', 'tier-name', 'TIER ' + tier));
+      head.appendChild(el('div', 'tier-fill'));
+      head.appendChild(el('div', 'tier-count', String(group.length)));
+      box.appendChild(head);
+    }
+
+    grid(box, group);
+  }
+}
+
 function renderRows(rows) {
   const box = $('rows');
   box.replaceChildren();
 
   // "Any" first and always, whatever is filtered: it is how a field is cleared, not one of the options. Drawn
-  // as the game draws it, a tile with a cross in it.
+  // as the game draws it, a dashed frame with a cross in it.
   if (view.none) {
     const line = lineNode();
-    const tile = el('div', 'tile' + (view.none.sel ? ' sel' : ''));
+    const tile = el('div', 'tile any' + (view.none.sel ? ' sel' : ''));
     const pick = el('button', 'shot shot-any');
     pick.appendChild(el('span', 'shot-cross', 'X'));
-    pick.appendChild(el('span', 'shot-name', view.none.name || 'None'));
+    pick.appendChild(el('span', 'shot-name', (view.none.name || 'None').toUpperCase()));
     pick.addEventListener('click', () => s1.call('picker.pick', ''));
+    pick.addEventListener('mouseenter', () => showRecord(ANY));
     tile.appendChild(pick);
     line.appendChild(tile);
     for (let i = 1; i < PER_ROW; i++) line.appendChild(el('div', 'tile hole'));
-    // Nothing ever hovers the Any tile into a tooltip, but the line carries one anyway so every line is built
+    // Nothing ever hovers the Any tile into a label, but the line carries one anyway so every line is built
     // the same way and the node count is the same whatever is on screen.
     line.appendChild(tipNode());
     box.appendChild(line);
@@ -649,29 +911,20 @@ function renderRows(rows) {
   // Headings only where there is something under them, so a filter that empties one half does not leave a label
   // standing over nothing.
   if (favs.length) {
-    box.appendChild(el('div', 'section', 'FAVOURITES'));
+    sectionHead(box, 'Favourites', favs.length, false);
     grid(box, favs);
   }
 
   if (vanilla.length) {
-    box.appendChild(el('div', 'section', 'VANILLA SEEDS'));
+    sectionHead(box, 'Vanilla seeds', vanilla.length, false);
     grid(box, vanilla);
   }
 
-  if (modded.length) {
-    box.appendChild(el('div', 'section', (view.added || 'ADDED BY MODS').toUpperCase()));
-
-    // A sub-heading per tier, and only for tiers that are actually in the list: a tier nobody has reached yet
-    // must not announce itself by having an empty heading.
-    const tiers = [];
-    for (const row of modded) if (tiers.indexOf(row.tier || 0) < 0) tiers.push(row.tier || 0);
-    tiers.sort((a, b) => (sort === 6 ? b - a : a - b));
-
-    for (const tier of tiers) {
-      if (tier > 0 && tiers.length > 1) box.appendChild(el('div', 'section sub', 'TIER ' + tier));
-      grid(box, modded.filter((row) => (row.tier || 0) === tier));
-    }
-  }
+  // ONE SECTION PER MOD, not one for "everything a mod added". Two strain catalogues installed at once used to
+  // land in the same heap under the same heading; the category each mod registered is the split it asked for.
+  const keys = [];
+  for (const row of modded) if (keys.indexOf(row.tab || '') < 0) keys.push(row.tab || '');
+  for (const key of keys) modSection(box, key, modded.filter((row) => (row.tab || '') === key));
 }
 
 /* ---- render ---------------------------------------------------------------------------------------------- */
@@ -679,7 +932,7 @@ function renderRows(rows) {
 function render() {
   shell();
 
-  $('pageR').className = 'card right' + (opened ? '' : ' shut');
+  $('pageR').className = 'page right' + (opened ? '' : ' shut');
 
   $('title').textContent = view.title || 'Select';
 
@@ -688,20 +941,20 @@ function render() {
   $('count').textContent = rows.length === all ? String(all) : rows.length + ' of ' + all;
 
   renderChips();
-  renderTicks();
   renderRows(rows);
-  renderPreview();
+  renderSheet();
+  renderDock();
 }
 
 /* ---- the opening effect ---------------------------------------------------------------------------------- */
 
 /*
-  THE CARD IS MOVED FRAME BY FRAME FROM SCRIPT, and that is not the first thing that was tried.
+  THE SHEET IS MOVED FRAME BY FRAME FROM SCRIPT, and that is not the first thing that was tried.
 
-  The parts are all here: `transform` renders on this surface (an inline `scaleX(0.35)` folds the card on the
-  spot), `transform-origin: left center` puts the hinge on its left edge, and the engine has a transition runner
+  The parts are all here: `transform` renders on this surface (an inline `scaleX(0.35)` folds the sheet on the
+  spot), `transform-origin: left center` puts the hinge on the crease, and the engine has a transition runner
   that interpolates scale. What does NOT happen is the tween. Measured with a 2400ms transition declared and a
-  screenshot every 130ms: the card was folded at rest, and fully open in the first frame after the write. No
+  screenshot every 130ms: the sheet was folded at rest, and fully open in the first frame after the write. No
   intermediate was ever drawn, on either route into it - a class swap or an inline write.
 
   So the interpolation is done here instead. Fourteen inline writes of `transform` over 300ms; each one is a
@@ -730,8 +983,8 @@ function flip() {
     clearInterval(timer);
 
     // CLEARED BY HAND. `#pageR` is markup and not something `render` rebuilds, so an inline transform left on
-    // it outlives the effect - and a transform that is still there paints the card's CHILDREN through it. Seen
-    // by leaving one at 0.75: the ticks and the preview drew clipped forty pixels short of the card's own
+    // it outlives the effect - and a transform that is still there paints the sheet's CHILDREN through it. Seen
+    // by leaving one at 0.75: the dock and the record drew clipped forty pixels short of the sheet's own
     // edge while every rect still answered the full width. `scaleX(1)` is identity and would have looked
     // right, which is exactly why it would have sat there unnoticed until something wrote a different value.
     page.style.transform = '';

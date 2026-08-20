@@ -31,19 +31,25 @@ namespace Clipwise.UI
         private const float FallbackWidth = 540f;
         private const float FallbackHeight = 620f;
 
-        /// <summary>Air between the two cards. Not a spine and not a board - the space is left empty so the
-        /// clipboard the player is already holding shows through it.</summary>
-        private const float Gutter = 10f;
+        /// <summary>
+        /// Air between the two pages: none.
+        ///
+        /// The two pages are one pad. The second sheet hangs off the first one's perforated edge, so a gap
+        /// between them would be a gap through the middle of a single sheet of paper. The fold itself is drawn
+        /// INSIDE both pages - a 20px gradient plus the perforation on the left, a 30px gradient on the right -
+        /// which is why nothing is needed between them.
+        /// </summary>
+        private const float Gutter = 0f;
 
         /// <summary>
-        /// The right card as a share of the left, and a CEILING rather than a target.
+        /// The right page as a share of the left, and a CEILING rather than a target.
         ///
-        /// "at max as high and wide as the left side" is the constraint that came back from the test, so it is
-        /// applied here - in the one place that knows how big vanilla's card actually is - rather than in a
-        /// stylesheet that can only guess. Height is not scaled at all: both cards are exactly the height of
-        /// vanilla's own, which satisfies "at max as high" and keeps the two rules level.
+        /// "at max as high and wide as the left side" is the constraint that came back from the test, and equal
+        /// IS the ceiling: a pad's second sheet is the same sheet of paper as its first. Applied here - in the
+        /// one place that knows how big vanilla's card actually is - rather than in a stylesheet that can only
+        /// guess. Height is not scaled at all: both pages are exactly the height of vanilla's own card.
         /// </summary>
-        private const float RightShare = 0.6f;
+        private const float RightShare = 1.0f;
 
         private static SurfaceHandle _surface;
         private static GameObject _host;
@@ -58,8 +64,8 @@ namespace Clipwise.UI
         private static float _spreadW = FallbackSpread;
 
         /// <summary>The fallback spread: the same arithmetic <see cref="Fit"/> does, on the fallback page.</summary>
-        private const float FallbackRight = 324f;   // Mathf.Round(540 * 0.6)
-        private const float FallbackSpread = FallbackWidth + Gutter + FallbackRight;
+        private const float FallbackRight = FallbackWidth;                // RightShare is 1
+        private const float FallbackSpread = FallbackWidth * 2f;          // + Gutter, which is 0
 
         internal static bool IsOpen => _host != null;
 
@@ -213,17 +219,19 @@ namespace Clipwise.UI
                 Vector2 size = paper.rect.size;
                 if (size.x < 1f || size.y < 1f) size = new Vector2(FallbackWidth, FallbackHeight);
 
-                // TWO CARDS, AND THE SURFACE HAS TO CARRY BOTH. The left one is exactly vanilla's card, because
+                // TWO PAGES, AND THE SURFACE HAS TO CARRY BOTH. The left one is exactly vanilla's card, because
                 // that is where it is drawn and how it goes on looking like the page it replaces. The right one
-                // is a share of it and never more - see RightShare.
+                // is the same sheet again - see RightShare - hanging off the perforated edge and past the board.
                 float pageW = size.x;
                 float pageH = size.y;
                 float pageRW = Mathf.Round(pageW * RightShare);
 
-                // The ceiling, enforced rather than assumed. Both cards are the height of vanilla's card, and
-                // the right one is narrower; this is what makes that a fact instead of an intention.
+                // The ceiling, enforced rather than assumed: "at most as high and as wide as the left". Equal is
+                // the ceiling, not a violation of it, and this is what makes that a fact instead of an intention.
                 pageRW = Mathf.Min(pageRW, pageW);
 
+                // Exactly twice the card with the constants above (Gutter 0, RightShare 1). Written as the sum
+                // anyway, because the sum is the thing that stays true if either constant is ever changed.
                 float wanted = pageW + Gutter + pageRW;
 
                 // NOT CLAMPED TO THE CANVAS, and that took two measurements to accept.
@@ -270,11 +278,11 @@ namespace Clipwise.UI
                 // player was already looking at, instead of the whole picker jumping sideways.
                 rect.anchoredPosition += new Vector2(wanted * 0.5f - pageW * 0.5f, 0f);
 
-                // THE TWO CARD SIZES, SAID OUT LOUD. The rule they have to satisfy is "the right one is at most
+                // THE TWO PAGE SIZES, SAID OUT LOUD. The rule they have to satisfy is "the right one is at most
                 // as high and as wide as the left", and a rule nobody can read off a screenshot is a rule that
                 // gets broken by the next change to the arithmetic.
-                Core.Log.Msg("[Clipwise] left card " + pageW.ToString("0") + "x" + pageH.ToString("0")
-                             + ", right card " + pageRW.ToString("0") + "x" + pageH.ToString("0")
+                Core.Log.Msg("[Clipwise] left page " + pageW.ToString("0") + "x" + pageH.ToString("0")
+                             + ", right page " + pageRW.ToString("0") + "x" + pageH.ToString("0")
                              + " (no wider: " + (pageRW <= pageW) + ", no taller: same height by construction)"
                              + ", surface " + wanted.ToString("0") + "x" + pageH.ToString("0")
                              + " from '" + paper.name + "', centred in '"
@@ -373,11 +381,15 @@ namespace Clipwise.UI
         }
 
         /// <summary>
-        /// The three view settings that outlive one open: <c>sort|favourites|discovered</c>.
+        /// The view settings that outlive one open: <c>sort|favourites|discovered|tierGroups|tierDescending</c>.
         ///
-        /// Kept on the C# side because they are the player's and not this page's - the same three were persisted
+        /// Kept on the C# side because they are the player's and not this page's - the first three were persisted
         /// before this picker existed, and a player who set "sort by yield" last week should not have to set it
         /// again because the screen was rebuilt in a different technology.
+        ///
+        /// THE SHORT FORM IS STILL ACCEPTED. Three fields is what every build before the tier groups sent, and
+        /// the page is a file on disk that a player can be running an older copy of (see the hot-reload override
+        /// folder). Missing fields keep whatever is stored rather than resetting it to a default.
         /// </summary>
         private static string State(string arg)
         {
@@ -387,6 +399,8 @@ namespace Clipwise.UI
             if (int.TryParse(parts[0], out int sort)) Prefs.UserPrefs.SortMode = sort;
             Prefs.UserPrefs.OnlyFavourites = parts[1] == "1";
             Prefs.UserPrefs.OnlyDiscovered = parts[2] == "1";
+            if (parts.Length > 3) Prefs.UserPrefs.TierGroups = parts[3] == "1";
+            if (parts.Length > 4) Prefs.UserPrefs.TierDescending = parts[4] == "1";
             Prefs.UserPrefs.Flush();
             return "ok";
         }
@@ -426,6 +440,10 @@ namespace Clipwise.UI
             sb.Append(",\"sort\":").Append(Prefs.UserPrefs.SortMode)
               .Append(",\"onlyFav\":").Append(Prefs.UserPrefs.OnlyFavourites ? "true" : "false")
               .Append(",\"onlyDisc\":").Append(Prefs.UserPrefs.OnlyDiscovered ? "true" : "false")
+              // The tier groups inside a mod's section, and which way round they run. A second level of sorting
+              // rather than a mode of the first: a player can ask for tier 5 at the top AND A-Z inside it.
+              .Append(",\"group\":").Append(Prefs.UserPrefs.TierGroups ? "true" : "false")
+              .Append(",\"dir\":").Append(Prefs.UserPrefs.TierDescending ? "true" : "false")
               .Append(",\"hiddenCount\":").Append(Prefs.UserPrefs.HiddenCount)
               // The tooltip preference outlived the card it was written for: the bubble beside a tile is the
               // same thing in the same place, so the same switch turns it off.
