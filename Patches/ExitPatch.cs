@@ -18,7 +18,10 @@ namespace Clipwise.Patches
         private static bool Prefix()
         {
             if (!SurfacePicker.IsOpen) return true;
-            SurfacePicker.Close();
+
+            // Asked, not taken: the page plays the fold backwards and closes itself when it lands. A second
+            // Escape during the fold closes it at once - see SurfacePicker.RequestClose.
+            SurfacePicker.RequestClose();
             return false;
         }
     }
