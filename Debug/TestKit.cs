@@ -618,6 +618,8 @@ namespace Clipwise.Debugging
             Say("Clipwise: the picker filters in its page now, so drive it there:");
             Say("  sideload_eval clipwise \"query = 'og'; render()\"");
             Say("  sideload_eval clipwise \"f.fav = true; render()\"");
+            Say("  sideload_eval clipwise \"f.fx.push('Calming'); render()\"    // an effect tick on the right card");
+            Say("  sideload_eval clipwise \"showPreview(view.rows[3])\"         // hover, without a mouse");
             Say("  sideload_eval clipwise \"console.log(visible().length + ' row(s) visible')\"");
         }
 

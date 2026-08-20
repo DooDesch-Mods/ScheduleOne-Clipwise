@@ -1,299 +1,198 @@
 /*
-  The clipboard as a binder: a wooden board, a bulldog clip, two pages with a spiral between them, and coloured
-  tabs sticking out of the left edge.
+  The vanilla clipboard's own seed page, and a second, narrower card beside it.
 
-  ONE PAPER TONE. `--paper` is written once and every paper surface reads it - both pages, the detail card, the
-  tab labels. The mock-up that started this had two different whites in it because a page had been pasted onto a
-  photograph of a notebook, and the tester's one note about it was that the seam showed. A constant cannot drift;
-  a colour chosen per surface will, the first time somebody adds a third surface.
+  COLOURS ARE VANILLA'S, not this mod's. The card is the game's light paper grey, the type is near-black and
+  nothing is tinted. A wooden board with cream paper and coloured tabs on it reads as a different game; the
+  reference for how this sits is the clipboard the player already has in their hands.
+
+  BOTH CARDS ARE THE SAME SHEET. Same grey, same padding, same rule. The right one is narrower and no taller,
+  which is the only difference between them.
 
   Sideload's CSS is a subset: no z-index, no hsl(), no flex-wrap, px and % only. Every box is a flex container
-  and the DEFAULT direction is COLUMN, so a row has to say so. `transform` and `transition` DO exist, on
-  layout-free properties only - which is what the page flip is built out of.
+  and the DEFAULT direction is COLUMN, so a row has to say so. `transform` exists on the paint-only list, which
+  is what the opening effect is built out of.
 */
-
-:root {
-  /* The one paper tone. Everything that is meant to be paper reads this and nothing else. */
-  --paper:  #f6f4ee;
-  /* Paper with something pressed into it - a search box, a tick list, the card's own table. Derived from the
-     paper once, in one place, for the same reason the paper is one value. */
-  --sunk:   #eceae3;
-  --ink:    #23262b;
-  --faint:  #8b9098;
-  --mid:    #5b6068;
-  --hair:   #cfccc4;
-  --rule:   #3a3d42;
-
-  --wood:      #6b4630;
-  --wood-lip:  #8a5f40;
-}
 
 body {
   /* Required. The percentage heights below need a definite basis and the root is auto-height. */
   height: 100%;
   font-family: game-ui;
   font-size: 15px;
-  color: var(--ink);
+  color: #23262b;
 }
 
-/* ============================================================================================================
-   THE SHELL - the clipboard itself, and NOT the seed picker.
-
-   Board, clip, paper, spiral, tab rail, page head, rule. Every clipboard screen this mod draws sits inside it;
-   a screen owns what is in the two pages and nothing out here. Everything below the "THE SEED PICKER" banner
-   is one screen's content and is the part a second screen replaces.
-   ============================================================================================================ */
-
-/* ---- the board ------------------------------------------------------------------------------------------- */
-
-.board {
-  height: 100%;
-}
-
-/* The board. A ROW, because the tab rail is the first thing on it and the pages follow. */
-.wood {
-  flex: 1;
-  min-width: 0;
-  flex-direction: row;
-  align-items: stretch;
-  padding: 12px;
-  border-radius: 7px;
-  background: var(--wood);
-  border: 2px solid var(--wood-lip);
-}
-
-/* The strip the tabs live in, along the board's left edge. Its width comes from the mod (`rail`). */
-.rail {
-  flex: none;
-  padding: 40px 0 0 0;
-  gap: 5px;
-  align-items: flex-end;
-}
-
-/* ---- the clip -------------------------------------------------------------------------------------------- */
-
-/* Over the top of the left page, half on the paper and half on the board, the way a bulldog clip sits. Placed
-   by the script: where the middle of a page is depends on how wide vanilla drew its own card. */
-.clip {
-  position: absolute;
-  top: -8px;
-  width: 132px;
-  height: 30px;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  gap: 44px;
-  border-radius: 3px;
-  background: #17181a;
-  border: 1px solid #2c2e31;
-}
-
-.clip-hole {
-  width: 9px;
-  height: 9px;
-  border-radius: 5px;
-  background: #d8dade;
-}
-
-/* ---- the two pages --------------------------------------------------------------------------------------- */
+/* ---- the two cards --------------------------------------------------------------------------------------- */
 
 .spread {
-  flex: 1;
-  min-height: 0;
+  height: 100%;
   flex-direction: row;
   align-items: stretch;
 }
 
-.page {
+/* Widths come from the mod. `flex: none` so neither card is stretched or squeezed to fill the host - the left
+   one has to stay exactly the size of vanilla's card, because that is where it is drawn. */
+.card {
   flex: none;
+  height: 100%;
   min-height: 0;
-  padding: 20px 16px 12px 16px;
-  background: var(--paper);
+  padding: 18px 20px 16px 20px;
+  background: #d7d9dc;
   overflow: hidden;
 }
 
-.page.left  { border-radius: 4px 0 0 4px; }
-.page.right { border-radius: 0 4px 4px 0; }
+/* Nothing but air between the sheets. No board, no spine. */
+.gap {
+  flex: none;
+  background: transparent;
+}
 
 /*
-  THE FLIP, AND WHY IT IS A SCALE RATHER THAN A ROTATION.
+  THE OPENING EFFECT, AND WHY IT IS A SCALE RATHER THAN A ROTATION.
 
-  A page turning is a transform over time, and this engine has exactly the family that can carry one:
   `transform` is on the paint-only list, so writing it from script repaints ONE box instead of rebuilding the
-  page, and `Transitions` interpolates translate, scale, rotate and opacity between two styles. What it does not
-  have is `@keyframes` or a third dimension, so a real rotateY is out.
+  page. What the engine does not have is `@keyframes` or a third dimension, so a real rotateY is out.
 
-  What is left is the flat approximation every 2D book does: the right page starts folded onto the spine
-  (`scaleX(0)` about its left edge) and opens out to full width. app.js writes `transform: scaleX(1)` inline one
-  tick after the first render, which is the frame that gives the tween a zero to start from.
-
-  The board is already spread-width underneath, because a transform runs after layout and can never move a
-  sibling. That is the honest version of the motion anyway: the binder is open, the page swings over onto it.
+  What is left is the flat approximation: the right card starts folded onto its own left edge (`scaleX(0)`) and
+  opens out to full width. The left card never moves, because a transform runs after layout and can never push
+  a sibling around.
 */
-.page.right {
-  /* The hinge is the spine, so the page opens out to the right instead of growing from its middle. */
-  transform-origin: left center;
-}
+.card.right { transform-origin: left center; }
 
-/* THE CLASS IS ON THE PAGE, NEVER ON AN ANCESTOR. `.board.shut .page.right` was written first and does
-   nothing at all here - measured: the board carried `shut`, the page was still full width, and an inline
-   `scaleX(0.35)` on the same element folded it on the spot. A two-class compound on the element itself is
-   fine (`.tab.out` widens a tab); it is the DESCENDANT combinator that does not arrive. */
-.page.right.shut { transform: scaleX(0); }
+/* THE CLASS IS ON THE CARD, NEVER ON AN ANCESTOR. `.spread.shut .card.right` does nothing at all here -
+   measured: the ancestor carried `shut`, the card stayed full width, and an inline `scaleX(0.35)` on the same
+   element folded it on the spot. A two-class compound on the element itself is fine; it is the DESCENDANT
+   combinator that does not arrive. */
+.card.right.shut { transform: scaleX(0); }
 
-/* ---- the spiral ------------------------------------------------------------------------------------------ */
-
-/* Down the fold. The rings are boxes - there is no way to draw a coil, and at this size a stack of steel
-   lozenges reads as one. Their count is worked out from the page height by the script. */
-.binder {
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  background: var(--paper);
-}
-
-.ring {
-  width: 30px;
-  height: 7px;
-  border-radius: 4px;
-  border: 1px solid #6f7379;
-  background: #c9ccd1;
-}
-
-/* ---- page heads ------------------------------------------------------------------------------------------ */
+/* ---- head -------------------------------------------------------------------------------------------- */
 
 .head {
+  flex: none;
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
-  height: 28px;
+  height: 30px;
 }
 
 .back {
-  width: 86px;
+  width: 92px;
   height: 26px;
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 700;
-  color: var(--ink);
+  color: #23262b;
   background: transparent;
   align-items: center;
 }
 
-.back:hover { color: var(--mid); }
+.back:hover { color: #5a5f68; }
 
 .head-title {
   flex: 1;
   min-width: 0;
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 700;
   text-align: center;
 }
 
-/* Balances the Back button so the title sits in the middle of the page rather than the middle of what is left. */
+/* Balances the Back button so the title sits in the middle of the card rather than the middle of what is left. */
 .head-count {
-  width: 86px;
+  width: 92px;
   font-size: 12px;
-  color: var(--faint);
+  color: #6b7079;
   text-align: right;
   align-items: center;
 }
 
-/* Vanilla draws a hand-inked stroke here rather than a border. A 2px rule is the closest the subset gets. */
+/* Vanilla draws a hand-inked stroke here rather than a border. A 2px rule is the closest the subset gets; the
+   real one is a sprite and would have to be shipped as a PNG. */
 .rule {
   flex: none;
   height: 2px;
-  margin: 6px 0 10px 0;
-  background: var(--rule);
+  margin: 8px 0 12px 0;
+  background: #3a3d42;
 }
 
-/* ---- the tabs -------------------------------------------------------------------------------------------- */
+/* ---- search ---------------------------------------------------------------------------------------------- */
+
+/* Sits in the right card's head slot, so the two rules line up. 30px rather than 32 for the same reason. */
+.find {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid #a9adb4;
+  border-radius: 4px;
+  background: #e9eaec;
+  color: #23262b;
+  align-items: center;
+}
+
+/* ---- the filter chips ------------------------------------------------------------------------------------ */
+
+/* A COLUMN of rows, and the script decides where each row ends - there is no flex-wrap in this engine, and a
+   single scrolling row hid the last chip behind the edge of the clipboard with nothing to say it was there. */
+.chips {
+  flex: none;
+  gap: 4px;
+  margin: 0 0 8px 0;
+}
+
+.chip-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  min-height: 26px;
+}
+
+.chip {
+  height: 24px;
+  /* Never squeezed to fit the bar: a chip narrower than its word is a chip with half a word in it. */
+  flex-shrink: 0;
+  padding: 0 10px;
+  /* The same slate the selected tile and an active chip already use, so the bar reads as one family of
+     controls rather than a light row above a dark one. */
+  border: 1px solid #3a3d42;
+  border-radius: 12px;
+  background: #e9eaec;
+  color: #4a4f57;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  align-items: center;
+}
+
+.chip:hover { background: #f2f3f4; }
+
+.chip.on {
+  background: #3a3d42;
+  border: 1px solid #3a3d42;
+  color: #f2f3f4;
+}
+
+/* ---- the effect filters ---------------------------------------------------------------------------------- */
 
 /*
-  Tucked in, and out on click.
-
-  A width that changes is a LAYOUT change, so this cannot be a `:hover` rule - state pseudo-classes here are
-  paint-only and a hovered tab would recolour without moving. It is a class the script sets instead, which is
-  also the behaviour that was asked for: they pop out when clicked, not when passed over.
+  Always on screen, never behind anything. On one page these were a drop-down behind a chip, because a chip per
+  effect ran off the edge of the card as soon as a mod declared more than a handful of tags - which is exactly
+  what a strain catalogue does. With a second card there is room to show the whole list, so it is shown: this is
+  the half of the picker that says what is NOT in the grid, and a filter that has to be opened to be read is a
+  filter that gets forgotten with something still ticked.
 */
-.tab {
-  flex: none;
-  width: 30px;
-  height: 44px;
-  align-self: flex-end;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  padding: 3px 2px;
-  border-radius: 5px 0 0 5px;
-  border: 1px solid rgba(0, 0, 0, 0.28);
-  background: #9aa0a8;
-}
-
-.tab.out {
-  width: 44px;
-  border: 1px solid #23262b;
-}
-
-.tab-ico {
-  width: 13px;
-  height: 13px;
-  border-radius: 3px;
-  background: rgba(0, 0, 0, 0.30);
-  color: #ffffff;
-  font-size: 9px;
-  font-weight: 700;
-  text-align: center;
-  align-items: center;
-}
-
-.tab-img {
-  width: 11px;
-  height: 11px;
-  color: #ffffff;
-}
-
-/* Two lines fit, and the script is what breaks them - `Sort:` over `default`. */
-.tab-txt {
-  font-size: 7px;
-  font-weight: 700;
-  line-height: 8px;
-  color: #ffffff;
-  text-align: center;
-}
-
-/* ============================================================================================================
-   THE SEED PICKER - one screen's content, inside the shell above.
-   ============================================================================================================ */
-
-/* ---- search and the effect ticks --------------------------------------------------------------------------- */
-
-.find {
-  flex: none;
-  height: 30px;
-  padding: 0 12px;
-  border: 1px solid var(--hair);
-  border-radius: 4px;
-  background: var(--sunk);
-  color: var(--ink);
-  align-items: center;
-}
-
-/* Always on screen, never behind anything: it is the half of the picker that says what is NOT shown. */
 .fx {
   flex: none;
-  margin: 10px 0 0 0;
-  padding: 6px 4px;
+  padding: 5px 4px;
   gap: 2px;
+  border: 1px solid #a9adb4;
   border-radius: 4px;
-  background: var(--sunk);
+  background: #e9eaec;
 }
 
 .fx-row {
   flex-direction: row;
   align-items: center;
   gap: 4px;
-  height: 18px;
+  height: 20px;
 }
 
 .tick {
@@ -302,31 +201,31 @@ body {
   flex-direction: row;
   align-items: center;
   gap: 5px;
-  height: 18px;
+  height: 20px;
   padding: 0 3px;
   background: transparent;
-  color: var(--mid);
-  font-size: 11px;
+  color: #4a4f57;
+  font-size: 12px;
   text-align: left;
 }
 
-.tick:hover { background: var(--paper); }
+.tick:hover { background: #f2f3f4; }
 
 .tick-box {
   flex: none;
-  width: 11px;
-  height: 11px;
-  border: 1px solid #9aa0a8;
+  width: 12px;
+  height: 12px;
+  border: 1px solid #8b9098;
   border-radius: 2px;
-  background: var(--paper);
-  color: var(--ink);
-  font-size: 9px;
+  background: #f7f8f9;
+  color: #23262b;
+  font-size: 10px;
   font-weight: 700;
   text-align: center;
   align-items: center;
 }
 
-.tick.on .tick-box { background: var(--rule); color: var(--paper); }
+.tick.on .tick-box { background: #3a3d42; color: #f2f3f4; }
 
 .tick-name {
   flex: 1;
@@ -336,105 +235,106 @@ body {
   white-space: nowrap;
 }
 
-/* ---- the detail card ------------------------------------------------------------------------------------- */
+/* ---- the hover preview ----------------------------------------------------------------------------------- */
 
 /*
-  Fills whatever is left under the ticks, and stays put until another tile is pointed at. Not a tooltip: a
-  tooltip is gone the moment the pointer is, and half of what this says is meant to be read while looking
-  somewhere else.
+  Fills whatever is left under the ticks and stays put until another tile is pointed at.
+
+  NOT a tooltip. A tooltip is gone the moment the pointer is, and half of what this says - the cross it came
+  from, the effects, the value - is meant to be read while the eye is somewhere else.
 */
-.card {
+.preview {
   flex: 1;
   min-height: 0;
   overflow: auto;
   margin: 10px 0 0 0;
-  padding: 12px 12px 10px 12px;
-  border: 1px solid var(--hair);
+  padding: 10px;
+  border: 1px solid #a9adb4;
   border-radius: 4px;
-  background: var(--paper);
+  background: #e9eaec;
 }
 
-.card-empty {
+.pv-empty {
   flex: 1;
-  color: var(--faint);
+  color: #8b9098;
   font-size: 12px;
   text-align: center;
   align-items: center;
   justify-content: center;
 }
 
-.card-top {
+.pv-top {
   flex-direction: row;
   align-items: flex-start;
   gap: 8px;
 }
 
-.card-head { flex: 1; min-width: 0; }
+.pv-head { flex: 1; min-width: 0; }
 
-.card-name {
-  font-size: 20px;
+.pv-name {
+  font-size: 17px;
   font-weight: 700;
-  color: var(--ink);
+  color: #23262b;
 }
 
-.card-prose {
-  margin: 4px 0 0 0;
+.pv-prose {
+  margin: 3px 0 0 0;
   font-size: 10px;
   line-height: 13px;
-  color: var(--mid);
+  color: #5b6068;
 }
 
 /* `color` TINTS a picture in this engine, so white is "leave it alone". The mod pads every icon to a square
    before it sends it, which is why this box can be one. */
-.card-bud {
+.pv-bud {
   flex: none;
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   color: #ffffff;
 }
 
-.card-badge {
-  align-self: flex-end;
+.pv-badge {
+  align-self: flex-start;
   margin: 6px 0 0 0;
   padding: 1px 6px;
   border-radius: 2px;
-  background: var(--rule);
-  color: var(--paper);
+  background: #3a3d42;
+  color: #f2f3f4;
   font-size: 8px;
   font-weight: 700;
   letter-spacing: 1px;
   align-items: center;
 }
 
-.card-rule {
+.pv-rule {
   height: 1px;
-  margin: 8px 0 6px 0;
-  background: var(--hair);
+  margin: 8px 0 4px 0;
+  background: #c6c9cd;
 }
 
-.card-src {
+.pv-src {
   font-size: 8px;
   font-weight: 700;
   letter-spacing: 1px;
-  color: var(--faint);
+  color: #8b9098;
   margin-bottom: 4px;
 }
 
 .fact {
   flex-direction: row;
   align-items: flex-start;
-  gap: 8px;
-  padding: 4px 0;
-  border-bottom: 1px solid var(--hair);
+  gap: 6px;
+  padding: 3px 0;
+  border-bottom: 1px solid #c6c9cd;
 }
 
 .fact-k {
   flex: none;
-  width: 92px;
+  width: 66px;
   font-size: 8px;
   font-weight: 700;
   letter-spacing: 1px;
-  color: var(--faint);
+  color: #8b9098;
   padding-top: 2px;
 }
 
@@ -442,67 +342,38 @@ body {
   flex: 1;
   min-width: 0;
   font-size: 11px;
-  color: var(--ink);
+  color: #23262b;
 }
 
-/* ---- the footer ------------------------------------------------------------------------------------------ */
-
-.foot {
-  flex: none;
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-  height: 22px;
-  margin-top: 6px;
-}
-
-.mini {
-  flex: none;
-  height: 20px;
-  padding: 0 8px;
-  border: 1px solid var(--hair);
-  border-radius: 10px;
-  background: var(--sunk);
-  color: var(--mid);
-  font-size: 10px;
-  font-weight: 600;
-  text-align: center;
-  align-items: center;
-}
-
-.mini:hover { background: var(--paper); }
-.mini.on { background: var(--rule); border: 1px solid var(--rule); color: var(--paper); }
-
-/* ---- the grid -------------------------------------------------------------------------------------------- */
+/* ---- the list -------------------------------------------------------------------------------------------- */
 
 .list {
   flex: 1;
   /* Without this the list never shrinks and so never scrolls. */
   min-height: 0;
-  /* Room for a bubble over the top row. The scroll area clips, and a bubble sits 18px above its tile. */
-  padding-top: 20px;
   overflow: auto;
 }
 
 .section {
   padding: 8px 2px 4px 2px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 1px;
-  color: var(--mid);
+  color: #4a4f57;
 }
 
-/* A tier inside the mod's own section. Indented and lighter, so it reads as a division of the heading above it
-   rather than another heading of the same rank. */
+/* A tier inside the mod's own section. Indented and lighter, so it reads as a division of the heading
+   above it rather than another heading of the same rank. */
 .section.sub {
-  padding: 6px 2px 2px 12px;
-  font-size: 9px;
-  color: var(--faint);
+  padding: 6px 2px 2px 14px;
+  font-size: 10px;
+  color: #8b9098;
 }
 
-/* One line of five. There is no wrapping in this engine, so the script cuts the lines and this only has to lay
-   one out. */
+/* ---- the grid -------------------------------------------------------------------------------------------- */
+
+/* One line of five. There is no wrapping in this engine, so the script cuts the lines and this only has to
+   lay one out. */
 .line {
   flex-direction: row;
   gap: 6px;
@@ -513,9 +384,11 @@ body {
   flex: 1;
   min-width: 0;
   height: 62px;
-  border: 1px solid var(--hair);
+  border: 1px solid #c6c9cd;
+  /* The game's own seed tiles are softer than this was. 4px read as a square with the corners filed off;
+     the tile it sits beside is visibly rounded. */
   border-radius: 8px;
-  background: var(--sunk);
+  background: #e4e6e8;
 }
 
 /* Fills the last line so its tiles keep the width of every other line's. */
@@ -524,14 +397,15 @@ body {
   background: transparent;
 }
 
-.tile.sel { border: 2px solid var(--rule); }
+.tile.sel { border: 2px solid #3a3d42; }
 
-/* The whole tile is the target. The star sits on top of it rather than inside, so starring and choosing stay
-   two separate clicks.
+/* The whole tile is the target. The star sits on top of it rather than inside, so starring and choosing
+   stay two separate clicks.
 
-   CENTRED ON BOTH AXES, and it has to be said rather than left to the padding. `align-items` alone only settles
-   the cross axis; the column's own axis is `justify-content`, and without it the picture hangs from the top
-   whatever the padding says. */
+   CENTRED ON BOTH AXES, and it has to be said rather than left to the padding. This was 4px at the top
+   against 2px at the bottom, so every vial sat a pixel high in its tile - which is what "not centered like
+   the vanilla tiles" is. `align-items` alone only settles the cross axis; the column's own axis is
+   `justify-content`, and without it the picture hangs from the top whatever the padding says. */
 .shot {
   height: 60px;
   padding: 2px;
@@ -542,79 +416,95 @@ body {
   border-radius: 8px;
 }
 
-.shot:hover { background: var(--paper); }
+.shot:hover { background: #eef0f1; }
 
-/* The tile carries a picture and nothing else, the way the game's own does. The words are on the card.
+/* The tile carries a picture and nothing else, the way the game's own does. The words are on the facing card.
 
-   The picture is whatever the ITEM's own icon is at this moment - read off the live definition rather than off
-   a cached snapshot, which is what lets a mod that tints a seed per strain have every vial look like itself.
+   `color` on an image TINTS it in this engine, and without one here the picture inherits the card's ink and
+   comes out dark. White is "leave it alone". The square is honest because the mod pads every icon to one
+   before it sends it - a seed vial's own sprite is one to three and would arrive squashed otherwise.
 
    56 AND NOT 48. Going 40 -> 48 moved the layout box and changed not one pixel of the drawn vial: two
-   screenshots of the two builds were byte-identical over the tile while the computed tree reported 48x48. 56 is
-   the first step that actually draws bigger. */
+   screenshots of the two builds are byte-identical over the tile, while the computed tree dutifully reported
+   48x48. 56 is the first step that actually draws bigger. */
 .shot-img {
-  width: 52px;
-  height: 52px;
+  width: 56px;
+  height: 56px;
   color: #ffffff;
 }
 
 /* The game draws the None option as an empty frame with a cross in it. */
 .shot-cross {
-  height: 28px;
-  font-size: 19px;
-  color: var(--faint);
+  height: 34px;
+  font-size: 20px;
+  color: #8b9098;
   text-align: center;
   align-items: center;
 }
 
 .shot-name {
   font-size: 10px;
-  color: var(--mid);
+  color: #5b6068;
   text-align: center;
 }
 
-/* ---- the hover bubble ------------------------------------------------------------------------------------ */
+/* ---- the tooltip ----------------------------------------------------------------------------------------- */
 
 /*
-  THE NAME, AND NOTHING ELSE. Everything the bubble used to carry - the parents, the tier, the effects - is on
-  the card on the facing page now, which stays put instead of vanishing with the pointer.
+  ONE PER LINE OF FIVE, BUILT WITH THE LINE AND NEVER TOUCHED AGAIN.
 
-  A CHILD OF THE TILE, MEASURED AGAINST NOTHING. The old one was placed by script from `anchor.rect()` minus
-  `row.rect()`, because those two cancel out the scroll offset a surface cannot read. This one needs no
-  coordinate at all: every box here is a containing block, so an absolute child of the tile is placed against
-  the tile, and a tile cannot be at the wrong place relative to itself.
+  A hover writes three properties on a node that is already there - the text, the left offset and the class that
+  fades it up - and adds or removes nothing. That is the whole design constraint, and it is #69 written as a
+  rule: the old bubble was CREATED on `mouseenter`, which is a structural change, which rebuilt the page, which
+  destroyed and recreated every tile, which raised `mouseenter` again for the new object under a pointer that
+  had not moved. uGUI raises a click only when the press and the release land on the SAME object, so the tile a
+  player pressed was destroyed several times before they let go and no click was ever raised.
 
-  NOT `position: fixed`, and that was never cosmetic. A fixed box gets a hit target whether or not anything
-  listens to it and is painted above the whole page, so the old bubble caught clicks meant for the seed under
-  it: the click reached the bubble, the bubble answered nothing, and even the stray-click reporter never saw
-  it because a hoisted box is no longer inside the list it was written in. `pointer-events: none` is the belt
-  to that braces - it is checked before anything is wired, and it is inherited.
+  ONE PER LINE RATHER THAN ONE PER TILE, because the node count is paid for on every render and a catalogue is
+  seven hundred tiles. A line's tooltip is empty and invisible unless the pointer is on that line.
 
-  THE PURPLE IS THE BREEDING TENT'S OWN, MEASURED. `TentFabric` in breeding_tent.glb is (0.38, 0.055, 0.68) in
-  linear space, which is #A642D7 in sRGB. The alpha is on the FILL and not on the element: 80% on the element
-  would take the word down with it, and the word is the whole bubble.
+  NOT `position: fixed`, and that was never cosmetic. A fixed box is measured against the viewport, and this
+  page cannot say where a tile is in the viewport: every number it can read is a layout coordinate and the
+  scroll offset is in none of them. The engine also treats a fixed box as modal by nature - it gives it a hit
+  target whether or not anything listens to it, and draws it above everything - so it catches the clicks meant
+  for the tile under it. Absolute inside the line needs no coordinate to be measured at all: the column number
+  says where the tile is, and the line scrolls with the list.
+
+  `pointer-events: none` stays anyway. It costs nothing, it is what a tooltip is, and it is the one line that
+  still holds if this ever becomes something the engine would otherwise let the player touch.
+
+  THE BACKGROUND IS TRANSLUCENT, THE TEXT IS NOT. Alpha on the fill leaves the tile underneath faintly
+  readable, which is what stops the tooltip reading as a second window dropped on the picker; putting the same
+  80% on the element instead would take the word down with it, and the word is the whole tooltip.
+
+  THE PURPLE IS THE BREEDING TENT'S OWN, MEASURED. `TentFabric` in breeding_tent.glb is (0.38, 0.055, 0.68)
+  in linear space, which is #A642D7 in sRGB. Sampling the tent in a screenshot gives about #340390 instead,
+  because the tent stands in shade - the authored colour is the one that reads as "the tent", and a colour
+  picked off a lit pixel would have been a different purple in every room.
 */
 .tip {
   position: absolute;
-  top: -18px;
-  left: -1px;
-  /* A WIDTH, not a max-width. An absolutely placed box here takes its containing block's width when none is
-     given, and the containing block is the tile - about 85px - so every name was cut to "Green C...". This is
-     wide enough for the names the game and the breeding table actually produce; a longer one still ellipsizes,
-     and the whole of it is on the card either way. */
-  width: 132px;
-  padding: 1px 6px;
+  /* The line's own top, which is the tile's top. The tooltip stands beside the tile rather than under it, so it
+     needs no vertical offset - and having none is what makes it impossible to place on the wrong row. */
+  top: 0;
+  pointer-events: none;
+  padding: 4px 8px;
   border: 1px solid #3a3d42;
   border-radius: 4px;
   background: rgba(166, 66, 215, 0.80);
   color: #ffffff;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  pointer-events: none;
+  /* Faded up by the script on the frame after the text is written: the engine has one style to apply and no
+     change to animate if both happen in the same pass, and a tooltip that appears at full strength flashes. */
+  opacity: 0;
+  transition: opacity 110ms;
 }
+
+.tip.on { opacity: 1; }
 
 /* ---- the star -------------------------------------------------------------------------------------------- */
 
@@ -631,17 +521,17 @@ body {
   justify-content: center;
 }
 
-/* The picture is white; `color` tints it. Its size comes from CSS alone - the HTML width and height attributes
-   never reach the layout, which runs without Unity and cannot read a PNG. */
+/* The picture is white; `color` tints it. Its size comes from CSS alone - the HTML width and height
+   attributes never reach the layout, which runs without Unity and cannot read a PNG. */
 .star-img {
-  width: 13px;
-  height: 13px;
+  width: 14px;
+  height: 14px;
   color: #b3b7bd;
 }
 
 .star.on .star-img { color: #e0a72c; }
 
-/* The opposite corner from the star, and only drawn while Hidden is on. */
+/* The opposite corner from the star, and only drawn while the Hidden chip is on. */
 .hide {
   position: absolute;
   top: 1px;
@@ -650,7 +540,7 @@ body {
   height: 16px;
   font-size: 11px;
   font-weight: 700;
-  color: var(--faint);
+  color: #a9adb4;
   background: transparent;
   text-align: center;
   align-items: center;
@@ -660,6 +550,6 @@ body {
 
 .empty {
   padding: 24px 8px;
-  color: var(--faint);
+  color: #71767e;
   text-align: center;
 }

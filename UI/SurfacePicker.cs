@@ -9,7 +9,7 @@ using UnityEngine;
 namespace Clipwise.UI
 {
     /// <summary>
-    /// The seed picker: one page, drawn by the same engine the in-game phone runs.
+    /// The seed picker: vanilla's own card, and a narrower second card beside it.
     ///
     /// WHY IT IS NOT uGUI. The screen it replaces was 730 lines building a scrim, a scroll rect, an input field, a
     /// chip bar, tab buttons and a row pool by hand, plus 218 more for a tooltip. As a surface all of that is
@@ -31,16 +31,19 @@ namespace Clipwise.UI
         private const float FallbackWidth = 540f;
         private const float FallbackHeight = 620f;
 
-        /// <summary>The spiral binder between the two pages, in the same CSS pixels the page is authored in. The
-        /// page draws the rings; this is only how much room the layout leaves for them.</summary>
-        private const float BinderWidth = 46f;
+        /// <summary>Air between the two cards. Not a spine and not a board - the space is left empty so the
+        /// clipboard the player is already holding shows through it.</summary>
+        private const float Gutter = 10f;
 
-        /// <summary>The wooden board the pages sit on, per side. The surface has to be bigger than the paper by
-        /// this much or there is no board to see.</summary>
-        private const float BoardEdge = 14f;
-
-        /// <summary>Room to the left of the board for the tabs to stick out into.</summary>
-        private const float TabRail = 44f;
+        /// <summary>
+        /// The right card as a share of the left, and a CEILING rather than a target.
+        ///
+        /// "at max as high and wide as the left side" is the constraint that came back from the test, so it is
+        /// applied here - in the one place that knows how big vanilla's card actually is - rather than in a
+        /// stylesheet that can only guess. Height is not scaled at all: both cards are exactly the height of
+        /// vanilla's own, which satisfies "at max as high" and keeps the two rules level.
+        /// </summary>
+        private const float RightShare = 0.6f;
 
         private static SurfaceHandle _surface;
         private static GameObject _host;
@@ -51,10 +54,12 @@ namespace Clipwise.UI
         /// viewport it cannot see. Written by <see cref="Fit"/> and sent with the view.</summary>
         private static float _pageW = FallbackWidth;
         private static float _pageH = FallbackHeight;
+        private static float _pageRW = FallbackRight;
         private static float _spreadW = FallbackSpread;
 
         /// <summary>The fallback spread: the same arithmetic <see cref="Fit"/> does, on the fallback page.</summary>
-        private const float FallbackSpread = TabRail + BoardEdge + FallbackWidth + BinderWidth + FallbackWidth + BoardEdge;
+        private const float FallbackRight = 324f;   // Mathf.Round(540 * 0.6)
+        private const float FallbackSpread = FallbackWidth + Gutter + FallbackRight;
 
         internal static bool IsOpen => _host != null;
 
@@ -208,15 +213,20 @@ namespace Clipwise.UI
                 Vector2 size = paper.rect.size;
                 if (size.x < 1f || size.y < 1f) size = new Vector2(FallbackWidth, FallbackHeight);
 
-                // TWO PAGES WIDE, AND THE SURFACE HAS TO CARRY BOTH. The picker is a binder opened flat, so the
-                // host is no longer the size of vanilla's card - it is the card twice over, plus the binder
-                // between them, plus the board they lie on and the strip the tabs stick out into. The vanilla
-                // card is still what a single PAGE measures, which is why it is measured at all.
+                // TWO CARDS, AND THE SURFACE HAS TO CARRY BOTH. The left one is exactly vanilla's card, because
+                // that is where it is drawn and how it goes on looking like the page it replaces. The right one
+                // is a share of it and never more - see RightShare.
                 float pageW = size.x;
                 float pageH = size.y;
-                float wanted = TabRail + BoardEdge + pageW + BinderWidth + pageW + BoardEdge;
+                float pageRW = Mathf.Round(pageW * RightShare);
 
-                // NOT CLAMPED TO ANYTHING, and that took two measurements to accept.
+                // The ceiling, enforced rather than assumed. Both cards are the height of vanilla's card, and
+                // the right one is narrower; this is what makes that a fact instead of an intention.
+                pageRW = Mathf.Min(pageRW, pageW);
+
+                float wanted = pageW + Gutter + pageRW;
+
+                // NOT CLAMPED TO THE CANVAS, and that took two measurements to accept.
                 //
                 // The clipboard is not drawn on a screen-sized canvas with the card inset into it. `ManagementCanvas`
                 // IS the card: 420x600, the same rect as the paper, with the Mask inside it at the same size. So
@@ -224,8 +234,7 @@ namespace Clipwise.UI
                 // page 151 pixels wide with 26-pixel tiles on it - correct arithmetic against the wrong box.
                 //
                 // A Canvas does not clip (only the Mask does, and this is out of it), so a rect wider than the
-                // canvas simply draws wider. That is also what the spread is meant to look like: the board grows
-                // sideways as the binder opens.
+                // canvas simply draws wider.
                 RectTransform canvasRect = canvasRoot.GetComponent<RectTransform>();
                 Core.LogDebug("[Clipwise] canvas '" + canvasRoot.name + "' rect "
                               + (canvasRect != null ? canvasRect.rect.size.ToString() : "?")
@@ -233,13 +242,15 @@ namespace Clipwise.UI
 
                 _pageW = pageW;
                 _pageH = pageH;
+                _pageRW = pageRW;
                 _spreadW = wanted;
 
                 // PLACED AGAINST THE HOLDER, THEN LIFTED OUT OF IT.
                 //
                 // The holder is where vanilla's card sits, so it is the only thing that answers "where on the
-                // screen does this belong". It is also a Mask exactly one page wide, and a spread parented into
-                // it is cut in half - uGUI does not clip by default, but a RectMask2D above you very much does.
+                // screen does this belong". It is also a Mask exactly one card wide, and a wider surface
+                // parented into it is cut off - uGUI does not clip by default, but a RectMask2D above you very
+                // much does.
                 //
                 // So: sized and centred under the holder, then re-parented to the canvas with
                 // worldPositionStays, which keeps the pixels exactly where they were and leaves the mask behind.
@@ -254,13 +265,19 @@ namespace Clipwise.UI
 
                 rect.SetParent(canvasRoot, true);
 
-                // And slid right, so it is the LEFT PAGE that lands on vanilla's card rather than the middle of
-                // the spread. That is what makes the fold look like it opened out of the board the player was
-                // already looking at instead of the board jumping sideways.
-                rect.anchoredPosition += new Vector2(wanted * 0.5f - (TabRail + BoardEdge + pageW * 0.5f), 0f);
+                // And slid right, so it is the LEFT CARD that lands on vanilla's card rather than the middle of
+                // the pair. That is what makes the second card look like it opened out beside the clipboard the
+                // player was already looking at, instead of the whole picker jumping sideways.
+                rect.anchoredPosition += new Vector2(wanted * 0.5f - pageW * 0.5f, 0f);
 
-                Core.Log.Msg("[Clipwise] surface " + wanted.ToString("0") + "x" + pageH.ToString("0")
-                             + " (page " + pageW.ToString("0") + ") from '" + paper.name + "', centred in '"
+                // THE TWO CARD SIZES, SAID OUT LOUD. The rule they have to satisfy is "the right one is at most
+                // as high and as wide as the left", and a rule nobody can read off a screenshot is a rule that
+                // gets broken by the next change to the arithmetic.
+                Core.Log.Msg("[Clipwise] left card " + pageW.ToString("0") + "x" + pageH.ToString("0")
+                             + ", right card " + pageRW.ToString("0") + "x" + pageH.ToString("0")
+                             + " (no wider: " + (pageRW <= pageW) + ", no taller: same height by construction)"
+                             + ", surface " + wanted.ToString("0") + "x" + pageH.ToString("0")
+                             + " from '" + paper.name + "', centred in '"
                              + holder.name + "' (" + holder.rect.width.ToString("0") + "x"
                              + holder.rect.height.ToString("0") + ").");
 
@@ -389,16 +406,16 @@ namespace Clipwise.UI
             var sb = new StringBuilder(1024);
             sb.Append("{\"title\":").Append(Quote(view.Title));
 
-            // THE SPREAD, MEASURED IN C# AND SENT. The page cannot ask how big it is: a surface answers layout
-            // coordinates and nothing about the viewport, so a script that wants to split a board into two pages
-            // has to be told where the fold is. These are the numbers `Fit` just measured, in the same CSS pixels
-            // the page is authored in.
+            // THE TWO CARD SIZES, MEASURED IN C# AND SENT. The page cannot ask how big it is: a surface answers
+            // layout coordinates and nothing about the viewport, so a script that wants two cards side by side
+            // has to be told how wide each of them is. These are the numbers `Fit` just measured, in the same CSS
+            // pixels the page is authored in - and `pageRW` already carries the ceiling, so the stylesheet never
+            // has to decide how big "at most as wide as the left" is.
             sb.Append(",\"w\":").Append(_spreadW.ToString("0.##", Culture))
               .Append(",\"h\":").Append(_pageH.ToString("0.##", Culture))
               .Append(",\"pageW\":").Append(_pageW.ToString("0.##", Culture))
-              .Append(",\"binder\":").Append(BinderWidth.ToString("0.##", Culture))
-              .Append(",\"edge\":").Append(BoardEdge.ToString("0.##", Culture))
-              .Append(",\"rail\":").Append(TabRail.ToString("0.##", Culture));
+              .Append(",\"pageRW\":").Append(_pageRW.ToString("0.##", Culture))
+              .Append(",\"gap\":").Append(Gutter.ToString("0.##", Culture));
 
             // The heading over everything a mod added, taken from the category its own rows are in. Worked out
             // here rather than in the page: a category key is namespaced (`clipwise:vanilla`), and the page
