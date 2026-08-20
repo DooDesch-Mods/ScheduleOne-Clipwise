@@ -1,39 +1,111 @@
 /*
-  The picker, as a page.
+  The picker, as a page: a binder opened flat.
 
   Wire format is deliberately flat: `picker.view` answers one JSON object, `picker.pick` takes one item id,
-  `picker.fav` stars one, `picker.back` closes without choosing. Everything else - what was typed, which filter
-  is on - is the page's own business and never crosses the bridge, so a keystroke costs nothing on the C# side.
+  `picker.fav` stars one, `picker.back` closes without choosing. Everything else - what was typed, which tab is
+  out - is the page's own business and never crosses the bridge, so a keystroke costs nothing on the C# side.
 
   s1.call is SYNCHRONOUS and returns a string. An empty string means no handler or a handler that threw, and
   both are states this page has to survive: it draws the empty case rather than throwing on JSON.parse.
 
-  NO SYMBOL GLYPHS ANYWHERE. Anything outside Latin-1 comes out as a box in the game's font, so an arrow is the
-  word "up" and a star is a picture.
+  NO SYMBOL GLYPHS ANYWHERE. Anything outside Latin-1 comes out as a box in the game's font, so a star is a
+  picture and every tab icon is a letter.
 
-  TILES, NOT ROWS, because this replaces the game's own seed page and that page is a grid. A tile is sixty
-  pixels wide and holds a picture; everything a row used to say - the parents, the tier, the effects - moved
-  into the bubble that appears while the pointer is on it.
+  TILES, NOT ROWS, because this replaces the game's own seed page and that page is a grid. What a row used to
+  say - the parents, the tier, the effects - is on the detail card on the facing page, which stays put instead
+  of following the pointer.
 */
 
 const $ = (id) => document.getElementById(id);
 
 const PER_ROW = 5;
 
-let view = { title: 'Select', tabs: [], rows: [], none: null, added: 'ADDED BY MODS', tags: [] };
+let view = {
+  title: 'Select', tabs: [], rows: [], none: null, added: 'ADDED BY MODS', tags: [],
+  w: 940, h: 620, pageW: 420, binder: 46, edge: 14, rail: 44,
+};
+
 let query = '';
 
-/*
-  Filters are independent toggles, not one choice out of a list, because that is what they were before this
-  screen was rebuilt: a player who wants their favourites of one tier picks both.
-*/
-let f = { fav: false, hidden: false, vanilla: false, bred: false, tags: [] };
+/* Which tab is out. Exactly one, because a tab is a place to be rather than a switch: the tester's list reads
+   as one choice ("favorites, all, default, a-z, ...") and every entry in it answers the same question about
+   the grid. The effect ticks are the independent filter and sit on the other page. */
+let tab = 'all';
 
-/* One chip cycles through these. Index 0 keeps the order the mod supplied, which is the only order that means
-   anything to the mod that supplied it. */
-const SORTS = ['Sort: default', 'Sort: A-Z', 'Sort: yield', 'Sort: growth', 'Sort: value',
-               'Sort: tier up', 'Sort: tier down'];
-let sort = 0;
+/* Ticked effect tags. Independent of the tab on purpose - a player who wants their calming tier-2 strains
+   picks a tier tab and a tick, not one compound thing. */
+let ticks = [];
+
+/* Hidden entries are out of the list until this is on. Without it a hidden item could never be unhidden. */
+let showHidden = false;
+
+/* Has the flip run. False for exactly one render - the one the flip starts from. */
+let opened = false;
+
+/*
+  THE TABS, IN THE ORDER THAT WAS ASKED FOR.
+
+  `need` decides whether a tab is shown at all: only tabs the player has something for. Without a tier-5
+  discovery there is no tier-5 tab, and with nothing starred there is no Favorites tab - a tab that filters a
+  list down to nothing is a dead end with a colour on it.
+
+  The icon is a LETTER, never a symbol. The game's TMP atlases carry Latin text and little else, so an arrow or
+  a crown comes out as an empty box. The one picture is the star, which ships with the bundle.
+*/
+const SORT_TABS = {
+  'default': 0,
+  'a-z': 1,
+  'yield': 2,
+  'growth': 3,
+  'value': 4,
+  'tier up': 5,
+  'tier down': 6,
+};
+
+function tabDefs(rows) {
+  const tiers = [];
+  for (const row of rows) {
+    const t = row.tier || 0;
+    if (t > 0 && tiers.indexOf(t) < 0) tiers.push(t);
+  }
+  tiers.sort((a, b) => a - b);
+
+  const anyFav = rows.some((r) => r.fav);
+  const anyTier = tiers.length > 0;
+  const anyYield = rows.some((r) => (r.yield || 0) > 0);
+  const anyGrowth = rows.some((r) => (r.growth || 0) > 0 && r.growth < 2000000000);
+  const anyValue = rows.some((r) => (r.value || 0) > 0);
+
+  const out = [];
+  if (anyFav) out.push({ id: 'favorites', star: true, lines: ['Favorites'], col: '#e0a72c' });
+  out.push({ id: 'all', ico: 'A', lines: ['All'], col: '#d97c2b' });
+  out.push({ id: 'default', ico: 'D', lines: ['Sort:', 'default'], col: '#c04a3c' });
+  out.push({ id: 'a-z', ico: 'Z', lines: ['Sort:', 'A-Z'], col: '#c04a3c' });
+  if (anyYield) out.push({ id: 'yield', ico: 'Y', lines: ['Sort:', 'yield'], col: '#b8533f' });
+  if (anyGrowth) out.push({ id: 'growth', ico: 'G', lines: ['Sort:', 'growth'], col: '#b8533f' });
+  if (anyValue) out.push({ id: 'value', ico: 'V', lines: ['Sort:', 'value'], col: '#b8533f' });
+  if (anyTier) out.push({ id: 'tier up', ico: '+', lines: ['Tier', 'up'], col: '#a4566e' });
+  if (anyTier) out.push({ id: 'tier down', ico: '-', lines: ['Tier', 'down'], col: '#a4566e' });
+
+  // A violet ramp, one step per tier the player actually has. Fixed steps rather than a gradient over the
+  // tiers present, so tier 3 is the same colour on a save that has reached tier 5 and on one that has not.
+  const violet = ['#7a54c0', '#8a5fc9', '#9a6bd1', '#a878d8', '#b585df'];
+  for (const t of tiers) out.push({ id: 'tier ' + t, ico: String(t), lines: ['Tier', String(t)], col: violet[Math.min(t, 5) - 1] });
+
+  return out;
+}
+
+function tierOfTab(id) {
+  const m = /^tier ([0-9]+)$/.exec(id || '');
+  return m ? parseInt(m[1], 10) : 0;
+}
+
+function sortOfTab(id) {
+  const s = SORT_TABS[id];
+  return s === undefined ? 0 : s;
+}
+
+/* ---- the wire ---------------------------------------------------------------------------------------- */
 
 function load() {
   const raw = s1.call('picker.view');
@@ -45,32 +117,39 @@ function load() {
     return;
   }
 
-  // Opened the way it was left. These three are the player's settings, kept on the mod's side.
-  sort = view.sort || 0;
-  f.fav = !!view.onlyFav;
+  // Opened the way it was left. The mod keeps the sort and the favourites switch because they are the
+  // player's and not this page's; the tab is only how they are shown here, so it is derived rather than
+  // stored twice.
+  if (view.onlyFav && (view.rows || []).some((r) => r.fav)) tab = 'favorites';
+  else {
+    tab = 'all';
+    for (const name in SORT_TABS) if (SORT_TABS[name] === (view.sort || 0) && SORT_TABS[name] !== 0) tab = name;
+  }
 }
 
-/** Push the three settings that outlive one open back to the mod. */
+/** Push the settings that outlive one open back to the mod. */
 function remember() {
-  // The third field is the discovered filter, which this page no longer has - the mod still stores it, so
-  // it is sent back unchanged rather than silently turned off for anybody using the other picker.
-  s1.call('picker.state', sort + '|' + (f.fav ? 1 : 0) + '|' + (view.onlyDisc ? 1 : 0));
+  // The third field is the discovered filter, which this page does not have - the mod still stores it, so it
+  // is sent back unchanged rather than silently turned off for anybody using the other picker.
+  s1.call('picker.state', sortOfTab(tab) + '|' + (tab === 'favorites' ? 1 : 0) + '|' + (view.onlyDisc ? 1 : 0));
 }
+
+/* ---- filtering and sorting ---------------------------------------------------------------------------- */
 
 function visible() {
   const q = query.trim().toLowerCase();
+  const tier = tierOfTab(tab);
 
   let rows = (view.rows || []).filter((row) => {
     // The current selection is always reachable. Filtering it away would leave the player unable to see what
     // the field is even set to.
     if (row.sel) return true;
 
-    if (!f.hidden && row.hidden) return false;
-    if (f.fav && !row.fav) return false;
-    if (f.vanilla && !row.vanilla) return false;
-    if (f.bred && row.vanilla) return false;
+    if (!showHidden && row.hidden) return false;
+    if (tab === 'favorites' && !row.fav) return false;
+    if (tier > 0 && (row.tier || 0) !== tier) return false;
 
-    for (const tag of f.tags) if ((row.tags || []).indexOf(tag) < 0) return false;
+    for (const tag of ticks) if ((row.tags || []).indexOf(tag) < 0) return false;
 
     if (!q) return true;
     return (
@@ -79,7 +158,7 @@ function visible() {
     );
   });
 
-  if (sort > 0) rows = rows.slice().sort(compare);
+  if (sortOfTab(tab) > 0) rows = rows.slice().sort(compare);
   return rows;
 }
 
@@ -92,7 +171,7 @@ function byName(a, b) {
 /** Ties always fall back to the name, so a sort is stable to look at rather than merely stable in memory. */
 function compare(a, b) {
   let r = 0;
-  switch (sort) {
+  switch (sortOfTab(tab)) {
     case 1: r = byName(a, b); break;
     case 2: r = (b.yield || 0) - (a.yield || 0); break;          // biggest first
     case 3: r = (a.growth || 0) - (b.growth || 0); break;        // fastest first
@@ -110,337 +189,276 @@ function el(kind, cls, text) {
   return node;
 }
 
+/* ============================================================================================================
+   THE SHELL
+
+   The clipboard, which every screen this mod draws sits in - and which knows nothing about seeds. A second
+   screen calls `shell()` and then fills `#pageL` and `#pageR`; it never lays out the board, the spiral or the
+   rail, because two copies of those are two things to keep in step.
+   ============================================================================================================ */
+
 /*
-  The filter bar.
+  The page is told how big it is, because it cannot ask.
 
-  FIXED CHIPS FOR THE SWITCHES, DROP-DOWNS FOR THE LISTS. A chip per effect ran off the edge of the card as
-  soon as a mod declared more than a handful of tags, which is exactly what a strain catalogue does. A list
-  that can be any length gets a drop-down; a switch that is on or off stays a chip.
-
-  There is no `Discovered` chip. Only discovered seeds reach this page at all, so it was a filter that never
-  removed anything.
+  A surface answers layout coordinates and nothing about the viewport, so "how wide is half of me" has no
+  answer here. The mod measured vanilla's own card in `SurfacePicker.Fit` and sent the numbers along, and this
+  is where they land on the boxes.
 */
-let open = null;   // which drop-down is showing, or null
+const CLIP_W = 132;
+
+function shell() {
+  const pageW = Math.round(view.pageW || 420);
+  const binderW = Math.round(view.binder || 46);
+  const railW = Math.round(view.rail || 44);
+  const h = Math.round(view.h || 620);
+
+  $('rail').style.width = railW + 'px';
+  $('pageL').style.width = pageW + 'px';
+  $('pageR').style.width = pageW + 'px';
+  $('binder').style.width = binderW + 'px';
+  // Over the middle of the LEFT page, which now starts after the rail.
+  $('clip').style.left = Math.max(0, Math.round(railW + pageW / 2 - CLIP_W / 2)) + 'px';
+
+  // The rings, as many as the fold is tall. 7px each with a 7px gap, and a margin at both ends so the top
+  // ring does not sit against the clip.
+  const box = $('binder');
+  const want = Math.max(6, Math.floor((h - 90) / 14));
+  if (box.children.length !== want) {
+    box.replaceChildren();
+    for (let i = 0; i < want; i++) box.appendChild(el('div', 'ring'));
+  }
+}
+
+/* ============================================================================================================
+   THE SEED PICKER - one screen, inside the shell above.
+   ============================================================================================================ */
+
+/* ---- the tabs ------------------------------------------------------------------------------------------ */
+
+function renderTabs(rows) {
+  const rail = $('rail');
+  rail.replaceChildren();
+
+  const defs = tabDefs(rows);
+
+  // The tab that was out may have stopped existing - the last favourite was unstarred, a filter emptied a
+  // tier. Falling back to All is the only choice that always has something under it.
+  if (!defs.some((d) => d.id === tab)) tab = 'all';
+
+  for (const def of defs) {
+    // `tab-<id>` carries no style. It exists so a test can aim at one particular tab - every tab is a `.tab`,
+    // and a selector that can only say "the first one" cannot check that clicking Tier 2 filters to tier 2.
+    const node = el('button', 'tab tab-' + def.id.replace(/[^a-z0-9]+/g, '-') + (def.id === tab ? ' out' : ''));
+    node.style.background = def.col;
+
+    if (def.star) {
+      const img = document.createElement('img');
+      img.className = 'tab-img';
+      img.src = 'star.png';
+      node.appendChild(img);
+    } else {
+      node.appendChild(el('span', 'tab-ico', def.ico));
+    }
+
+    // One box per line rather than a newline in one string: whitespace collapses in a text leaf, and
+    // `white-space: pre` on a box this small would stop it wrapping anything else either.
+    const txt = el('div', 'tab-txt');
+    for (const line of def.lines) txt.appendChild(el('div', 'tab-l', line));
+    node.appendChild(txt);
+
+    node.addEventListener('click', () => {
+      tab = def.id;
+      remember();
+      render();
+    });
+
+    rail.appendChild(node);
+  }
+}
+
+/* ---- the effect ticks ---------------------------------------------------------------------------------- */
 
 /** The tag groups a mod declared, as `prefix -> [tag]`, so `mod:effect/calming` becomes the "effect" list. */
 function groups() {
   const out = new Map();
 
-  for (const tag of view.tags || []) {
-    const cut = tag.id.indexOf('/');
-    const colon = tag.id.indexOf(':');
+  for (const t of view.tags || []) {
+    const cut = t.id.indexOf('/');
+    const colon = t.id.indexOf(':');
     if (cut < 0 || colon < 0 || cut < colon) continue;
 
-    const name = tag.id.substring(colon + 1, cut);
+    const name = t.id.substring(colon + 1, cut);
     if (!out.has(name)) out.set(name, []);
-    out.get(name).push(tag);
+    out.get(name).push(t);
   }
 
   return out;
 }
 
-/*
-  CHIP WIDTHS ARE ESTIMATED, NOT MEASURED, and that is the only option here.
+/** The effects, four to a line. There is no flex-wrap in this engine, so the lines are made rather than found. */
+const TICKS_PER_ROW = 4;
 
-  There is no flex-wrap in this engine, so a row of chips either runs off the card or gets chunked in script -
-  and chunking needs to know how wide each chip will be BEFORE it is laid out. `el.rect()` reports the last
-  render, which is a frame too late. Seven per em plus the padding matches the card's font closely enough that
-  a row breaks one chip early at worst, and one chip early is invisible while one chip late is a word sliced in
-  half at the edge of the clipboard.
-*/
-const CHIP_ROOM = 396;    // the card's 420 minus its side padding
-const CHIP_PAD = 22;      // the chip's own padding, both sides
-
-function chipWidth(label) {
-  return Math.round(String(label).length * 7) + CHIP_PAD;
-}
-
-function chip(row, label, on, act) {
-  const button = el('button', 'chip' + (on ? ' on' : ''), label);
-  button.addEventListener('click', () => { act(); render(); });
-  row.push({ node: button, width: chipWidth(label) });
-  return button;
-}
-
-function renderChips() {
-  const box = $('chips');
+function renderTicks() {
+  const box = $('fx');
   box.replaceChildren();
 
-  const wanted = [];
-
-  chip(wanted, 'Favorites', f.fav, () => { f.fav = !f.fav; remember(); });
-  /*
-    ONE CHIP FOR THREE STATES, not two chips for two.
-
-    Vanilla and Bred were never independent - turning one on turned the other off - so as two buttons they
-    spent a chip's worth of room on a choice that only ever has one answer at a time. One chip, cycling
-    all -> vanilla -> bred, labelled with the state it is in - the way the sort chip already worked.
-  */
-  chip(wanted, f.vanilla ? 'Vanilla' : f.bred ? 'Bred' : 'All', f.vanilla || f.bred, () => {
-    if (f.vanilla) { f.vanilla = false; f.bred = true; }
-    else if (f.bred) { f.bred = false; }
-    else { f.vanilla = true; }
-  });
-  if (view.hiddenCount || f.hidden) {
-    chip(wanted, 'Hidden (' + (view.hiddenCount || 0) + ')', f.hidden, () => { f.hidden = !f.hidden; });
-  }
-  chip(wanted, SORTS[sort] || SORTS[0], sort !== 0, () => { sort = (sort + 1) % SORTS.length; remember(); });
-
-  // One drop-down per tag group, named after the group. Its chip counts what is ticked, so a filter that is on
-  // is visible without opening it.
-  for (const [name, tags] of groups()) {
-    const chosen = tags.filter((t) => f.tags.indexOf(t.id) >= 0).length;
-    const label = name.charAt(0).toUpperCase() + name.slice(1) + (chosen ? ' (' + chosen + ')' : '');
-    chip(wanted, label, chosen > 0 || open === name, () => { open = open === name ? null : name; });
+  const all = groups();
+  // The effect list is what the board is for. Any other group a mod declared is appended after it rather than
+  // dropped - a mod that files "flavour" tags gets its ticks too.
+  const tags = [];
+  for (const [name, list] of all) {
+    if (name === 'tier') continue;   // the tiers are tabs, and having them twice is a filter fighting itself
+    for (const t of list) if (!tags.some((x) => x.id === t.id)) tags.push(t);
   }
 
-  // Only when something is actually on. A button that does nothing is worse than no button.
-  if (f.fav || f.vanilla || f.bred || f.tags.length || sort !== 0) {
-    chip(wanted, 'Clear', false, () => {
-      f.fav = false; f.vanilla = false; f.bred = false; f.tags = [];
-      sort = 0; open = null;
-      remember();
-    });
-  }
+  if (tags.length === 0) { box.style.display = 'none'; return; }
+  box.style.display = 'flex';
 
-  let row = null;
-  let used = 0;
-  for (const one of wanted) {
-    if (!row || used + one.width > CHIP_ROOM) {
-      row = el('div', 'chip-row');
-      box.appendChild(row);
-      used = 0;
+  tags.sort((a, b) => (a.label || '').toLowerCase() < (b.label || '').toLowerCase() ? -1 : 1);
+
+  let line = null;
+  tags.forEach((t, i) => {
+    if (i % TICKS_PER_ROW === 0) {
+      line = el('div', 'fx-row');
+      box.appendChild(line);
     }
-    row.appendChild(one.node);
-    used += one.width + 6;   // the row's gap
-  }
 
-  renderDropdown();
-}
-
-/** The open group's tick list, under the bar rather than over the grid - nothing to dismiss by accident. */
-function renderDropdown() {
-  const box = $('drop');
-  box.replaceChildren();
-
-  if (!open) { box.className = 'drop closed'; return; }
-  box.className = 'drop';
-
-  const tags = groups().get(open) || [];
-  for (const tag of tags) {
-    const ticked = f.tags.indexOf(tag.id) >= 0;
-    const line = el('button', 'tick' + (ticked ? ' on' : ''));
-    line.appendChild(el('span', 'tick-box', ticked ? 'x' : ''));
-    line.appendChild(el('span', 'tick-name', tag.label));
-    line.addEventListener('click', () => {
-      const at = f.tags.indexOf(tag.id);
-      if (at >= 0) f.tags.splice(at, 1); else f.tags.push(tag.id);
+    const on = ticks.indexOf(t.id) >= 0;
+    const node = el('button', 'tick' + (on ? ' on' : ''));
+    node.appendChild(el('span', 'tick-box', on ? 'x' : ''));
+    node.appendChild(el('span', 'tick-name', t.label));
+    node.addEventListener('click', () => {
+      const at = ticks.indexOf(t.id);
+      if (at >= 0) ticks.splice(at, 1); else ticks.push(t.id);
       render();
     });
-    box.appendChild(line);
+    line.appendChild(node);
+  });
+
+  // The last line is short, and a stretched tick would be a different width from the rest.
+  if (line) {
+    for (let i = tags.length % TICKS_PER_ROW; i > 0 && i < TICKS_PER_ROW; i++) line.appendChild(el('div', 'tick'));
   }
 }
 
-/*
-  The floating bubble, which is the whole reason a tile can afford to say nothing.
-
-  ONE NODE FOR THE WHOLE PAGE, not one per tile. Per-tile nodes left five bubbles on screen at once in a
-  tester's shot: a `mouseleave` that never arrives - the pointer left through a gap, the grid re-rendered under
-  it, the tile it belonged to was replaced - leaves a node with nobody to remove it. A single node cannot
-  accumulate, and anything that shows a new one takes the old one down first.
-
-  Two halves are still needed for WHEN and WHERE: `mouseenter`/`mouseleave` say which tile the pointer is on,
-  and the tile's own row is what the bubble is hung inside.
-*/
-let tip = null;
+/* ---- the detail card ----------------------------------------------------------------------------------- */
 
 /*
-  Which row the bubble on screen belongs to. Not bookkeeping - it is what stops the page rebuilding forever.
+  Which row the card is showing. Not bookkeeping - it is what stops the page rebuilding forever.
 
   Every DOM write rebuilds the page, and a rebuild destroys and recreates every box on it. The pointer has not
-  moved, but the box under it is a NEW object, so uGUI raises its enter again, which shows a bubble, which
-  writes to the DOM, which rebuilds. A probe listener on the list counted about ten of those rounds a second
-  with the pointer standing still.
+  moved, but the box under it is a NEW object, so uGUI raises its enter again, which fills the card, which
+  writes to the DOM, which rebuilds. A probe listener counted about ten of those rounds a second with the
+  pointer standing still.
 
   It is not only wasted work. uGUI raises a click only when the press and the release land on the SAME object,
   and while this runs the tile a player pressed is destroyed several times over before they let go - so no
   click is raised at all, nothing is picked, and nothing is logged either, since there was no click event to
   log. That is "I click a seed and the card just stays open", and it needs nothing in the way to happen.
 
-  So a request for the row that is already showing is answered with nothing at all: the first round builds the
-  bubble, the second finds it already there and writes nothing, and the loop stops after one turn.
+  So a request for the row that is already showing is answered with nothing at all.
 */
-let tipRow = null;
+let cardRow = null;
 
-/*
-  THE FADE, AND WHY IT IS BUILT LIKE THIS.
-
-  A bubble that lingers on purpose is a bubble that can be left behind on purpose - that was the original
-  stuck-bubble bug, and a fade-out reintroduces exactly the state it came from: a node outliving the tile it
-  belonged to. So the lifetime is bounded from both ends.
-
-  At most ONE dying bubble exists, and anything that shows a new one kills it on the spot rather than waiting
-  for its timer. That is the whole safety property: the only way a bubble stays on screen is if the timer never
-  fires AND the pointer never moves again, and the body-level `mousemove` backstop already covers the second.
-
-  The failure direction is right too - a mistake here loses a bubble, it does not strand one.
-*/
-let dying = null;
-let reaper = 0;
-
-function reap() {
-  if (reaper) { clearTimeout(reaper); reaper = 0; }
-  if (dying) { dying.remove(); dying = null; }
+function showCard(row) {
+  if (cardRow && row && cardRow.id === row.id) return;
+  cardRow = row;
+  render();
 }
 
-function hideTip() {
-  // Whatever was already on its way out goes now. Two fading bubbles is the state this is written to prevent.
-  reap();
+/** One "LABEL  value" line, and only when there is a value. A card that promises a field and shows nothing
+    under it is worse than a shorter card. */
+function fact(box, key, value) {
+  if (value === null || value === undefined || value === '') return;
+  const line = el('div', 'fact');
+  line.appendChild(el('span', 'fact-k', key));
+  line.appendChild(el('span', 'fact-v', String(value)));
+  box.appendChild(line);
+}
 
-  if (!tip) return;
-
-  // Dropping the class starts the transition back to zero; the node is removed once it has finished.
-  tip.className = 'bubble';
-  dying = tip;
-  tip = null;
-  tipRow = null;
-  reaper = setTimeout(reap, 160);
+function money(n) {
+  const v = Number(n) || 0;
+  if (v <= 0) return '';
+  return '$' + (Math.round(v * 100) / 100);
 }
 
 /*
-  PLACED INSIDE THE ROW IT BELONGS TO, which is the only frame this page can measure.
+  The sentence over the table.
 
-  Everything `rect()` answers is in LAYOUT coordinates: the engine sums each box's parent-relative x and y up
-  the tree, and the scroll offset is not in any of those numbers - scrolling moves a Unity transform, and the
-  layout never hears about it. Measured on a padded list scrolled to the bottom, the last tile reported y=882
-  while it was drawn at about y=525: out by the 357 pixels the list had been scrolled.
-
-  So a `position: fixed` bubble cannot be placed at all, because placing one needs a VIEWPORT coordinate for
-  a box the page can only describe in layout coordinates. Three ways out were checked against the running game
-  and two are closed:
-
-    - The pointer's own position. A probe listener on the list reported `clientX`, `clientY`, `offsetX`,
-      `offsetY`, `normX` and `normY` ALL ZERO for every enter over this surface. Whatever the engine cannot
-      convert here, it answers with zeroes rather than with an error, so a bubble placed from them lands in the
-      top left corner and stays there. Not usable, and not this page's to fix.
-    - The scroll offset itself. Nothing on the DOM surface reports it: no `scrollTop`, no `scrollHeight`.
-
-  What IS exact is the DIFFERENCE between two rects inside the SAME scrolled box: both carry the same missing
-  offset, so it cancels. That is the whole of the placement below - the tile's position within its own row -
-  and the bubble is hung inside that row rather than over the page, so the list carries it along when it
-  scrolls. Nothing left to go stale, and no viewport coordinate needed anywhere.
+  Built from what the mod actually sent - the parents, the tier and the number of effects on the plant - and
+  never from a rule about what a tier ought to mean. Every clause drops out on its own when its fact is
+  missing, so a vanilla seed with no parents gets a shorter line rather than a line with a hole in it.
 */
-/*
-  148 AND NOT MORE, because the width decides whether the bubble can stand BESIDE its tile at all.
+function prose(row) {
+  const bits = [];
+  if (row.note) bits.push('Root from ' + row.note + '.');
 
-  A row is 380 wide and a tile 69. At 168 the middle column had room on neither side and the bubble ended up
-  drawn over the very seed the pointer was on. 148 is the widest that still leaves 149 to the left of the
-  middle column and 150 to the right of it, so every one of the five columns gets a bubble next to its tile
-  and none of them needs to be pushed back inside the row.
-*/
-const TIP_WIDTH = 148;
-const TIP_GAP = 6;
+  const effects = (row.effects || []).length;
+  if (row.tier && effects) bits.push('Tier ' + row.tier + ', which means ' + effects + (effects === 1 ? ' effect' : ' effects') + ' straight off the plant.');
+  else if (row.tier) bits.push('Tier ' + row.tier + '.');
+  else if (effects) bits.push(effects + (effects === 1 ? ' effect' : ' effects') + ' straight off the plant.');
 
-function showTip(line, anchor, row) {
-  // Already up for this row. See `tipRow`: answering this with a rebuild is what looped the page.
-  if (tip && tipRow === row) return;
-
-  hideTip();
-
-  tip = el('div', 'bubble');
-  tip.appendChild(el('div', 'bubble-name', row.name));
-  if (row.note) tip.appendChild(el('div', 'bubble-line', row.note));
-  if (row.tier) tip.appendChild(el('div', 'bubble-line', 'Tier ' + row.tier));
-  if (row.effects && row.effects.length) tip.appendChild(el('div', 'bubble-line', row.effects.join(', ')));
-
-  // The tile's own place in its row, and the row's width. Both are differences or sizes rather than positions
-  // on the page, so both survive the list being scrolled.
-  const box = anchor.rect();
-  const bar = line.rect();
-  const room = bar.width;
-  const at = box.x - bar.x;
-
-  // Beside the tile, on whichever side of it the row has room for, so the seed being pointed at stays visible.
-  // The last line is a guard rather than a case that happens at five to a row: a bubble that ran off the end of
-  // the row would be cut in half by the list, so it is pushed back inside instead.
-  let left = at + box.width + TIP_GAP;
-  if (left + TIP_WIDTH > room) left = at - TIP_GAP - TIP_WIDTH;
-  if (left < 0) left = Math.max(0, Math.min(at, room - TIP_WIDTH));
-
-  tip.style.left = Math.round(left) + 'px';
-  tip.style.width = TIP_WIDTH + 'px';
-  line.appendChild(tip);
-  tipRow = row;
-
-  // Faded up a frame later, so the transition has a zero to start from - setting the class in the same pass
-  // as the append gives the engine one style to apply and no change to animate.
-  //
-  // The node is captured rather than read back off `tip`: by the time this runs the pointer may already be on
-  // the next tile, and turning on whatever `tip` happens to be then would light a bubble the script has
-  // already replaced.
-  const mine = tip;
-  setTimeout(() => { if (mine === tip) mine.className = 'bubble on'; }, 0);
+  return bits.join(' ');
 }
 
-/*
-  The row is handed in, not looked up, because a page has no way to walk back up from a box to its parent here.
+function renderCard() {
+  const box = $('card');
+  box.replaceChildren();
 
-  No listener is added anywhere new: `mouseenter` and `mouseleave` are on the tile's own button, which the
-  engine wires unconditionally for being a `button`. That matters more than it reads - an element with a
-  listener gets a hit target, a hit target answers every pointer interface including the wheel, and uGUI stops
-  at the first one it finds, so one in the wrong place takes the list's scrolling away. Nothing here is new, so
-  nothing here can.
-*/
-function bubble(anchor, row, line) {
-  anchor.addEventListener('mouseenter', () => showTip(line, anchor, row));
-  anchor.addEventListener('mouseleave', hideTip);
-  // A click re-renders the grid, and the tile this belonged to is gone with it.
-  anchor.addEventListener('click', hideTip);
+  const row = cardRow;
+  if (!row) {
+    box.appendChild(el('div', 'card-empty', 'Point at a seed to read it here.'));
+    return;
+  }
+
+  const top = el('div', 'card-top');
+  const head = el('div', 'card-head');
+  head.appendChild(el('div', 'card-name', row.name || row.id));
+
+  const line = prose(row);
+  if (line) head.appendChild(el('div', 'card-prose', line));
+  top.appendChild(head);
+
+  // The item's own picture, the same one its tile carries - so the bud on the card is the bud in hand.
+  const bud = document.createElement('img');
+  bud.className = 'card-bud';
+  bud.src = 's1://icon/' + row.id;
+  top.appendChild(bud);
+  box.appendChild(top);
+
+  if (row.fav) box.appendChild(el('div', 'card-badge', 'FAVOURITE'));
+
+  box.appendChild(el('div', 'card-rule'));
+
+  // Who filed this entry. Only for something a mod claimed - the game's own seeds need no credit line.
+  if (row.source) box.appendChild(el('div', 'card-src', String(row.source).toUpperCase()));
+
+  fact(box, 'CROSS', row.note);
+  fact(box, 'TIER', row.tier ? row.tier : '');
+  if (row.effects && row.effects.length) fact(box, 'EFFECTS', row.effects.join(', ') + ' (' + row.effects.length + ')');
+  fact(box, 'YIELD', row.yield ? row.yield + (row.harvest ? ' ' + row.harvest : '') : '');
+  fact(box, 'GROWTH', row.growth && row.growth < 2000000000 ? row.growth + ' h' : '');
+  fact(box, 'PRODUCT', row.product);
+  fact(box, 'TYPE', row.drug);
+  fact(box, 'VALUE', money(row.value));
+  fact(box, 'BUY PRICE', money(row.buy));
+  if (row.disc === false) fact(box, 'DISCOVERED', 'not yet');
+
+  // Whatever the registering mod answered for this item just now - a discoverer's alias, a trait, anything it
+  // knows and this page does not. Last, so a mod cannot push the game's own facts off the top of the card, and
+  // every one of them is subject to the same rule as the rest: no value, no row.
+  for (const extra of row.facts || []) fact(box, extra.k, extra.v);
 }
 
-/*
-  The backstop.
-
-  `mouseleave` is the right event and it does not always arrive: the pointer can leave a tile through the gap
-  between two of them, or the grid can re-render under a stationary pointer. Either way the bubble outlives the
-  tile it belonged to.
-
-  So the page also takes the pointer moving anywhere that is NOT a tile as "nothing is hovered". One listener,
-  and it makes a missed mouseleave cost a pixel of movement rather than a stuck bubble.
-
-  ON THE LIST AND NOT ON `document.body`, AND THAT IS THE WHOLE MOUSE WHEEL.
-
-  Registering any listener gives an element a hit target, and a hit target is an `EventTrigger`, which
-  implements EVERY pointer interface - `IScrollHandler` included. uGUI stops at the first handler it finds, so
-  a listener on the body swallowed every notch before the list underneath could see one. Sideload compensates
-  by forwarding the wheel to the nearest scroll area ABOVE the element (`Interaction.PassScrollingThrough`) -
-  and above the body there is nothing, so the notch died there.
-
-  The probe says it plainly: with this on the body it reported `scroll handled by 'body/hit'`; on a page
-  without it, `scroll handled by 'scroll-viewport'` and the content moves.
-
-  The list is inside the scroll area, so the same forward finds it. And the backstop only ever needed to catch
-  "the pointer moved within the list but off a tile" - leaving the list entirely is what `mouseleave` on the
-  tile already handles.
-*/
-$('rows').addEventListener('mousemove', (e) => {
-  if (!tip) return;
-  const over = e && e.target ? e.target : null;
-  if (over && over.className && String(over.className).indexOf('shot') >= 0) return;
-  hideTip();
-});
+/* ---- the grid ------------------------------------------------------------------------------------------ */
 
 /*
   A click that lands in the list but on nothing says WHAT it landed on.
 
-  The report this picker gets is "I click a seed and the card just stays open", and from the outside that has two
-  completely different causes: the pointer reached the page and hit the wrong node, or it never reached the page
-  at all. Nothing in a screenshot separates them, and neither does the pick handler - it is not called in either
-  case.
-
-  So the list itself listens. A click on a tile is answered by the tile and never gets here; anything else names
-  the node that took it, and SILENCE now means the pointer never arrived, which is an answer too. Costs one line
-  in the log per stray click and nothing at all in normal use.
+  The report this picker gets is "I click a seed and the card just stays open", and from the outside that has
+  two completely different causes: the pointer reached the page and hit the wrong node, or it never reached the
+  page at all. Nothing in a screenshot separates them, and neither does the pick handler - it is not called in
+  either case. So the list itself listens, and SILENCE now means the pointer never arrived.
 */
 $('rows').addEventListener('click', (e) => {
   const on = e && e.target ? String(e.target.className || '') : '';
@@ -448,9 +466,8 @@ $('rows').addEventListener('click', (e) => {
   s1.call('picker.stray', on || '(unnamed)');
 });
 
-/** One tile: the seed's picture, its star, and the bubble that carries the words. The row the tile goes into is
-    handed in because the bubble hangs inside it - see showTip. */
-function tileNode(row, line) {
+/** One tile: the seed's own picture and its star. Pointing at it fills the card on the facing page. */
+function tileNode(row) {
   const tile = el('div', 'tile' + (row.sel ? ' sel' : ''));
 
   // A button, not a div: the engine wires a hit target unconditionally for button, a, input and textarea.
@@ -461,13 +478,12 @@ function tileNode(row, line) {
   const pick = el('button', 'shot shot-item');
   const shot = document.createElement('img');
   shot.className = 'shot-img';
-  // Supplied by the mod at open time. When a conversion failed there is no picture behind this name, and the
-  // letters underneath are what the tile has left to identify itself with.
+  // Supplied by the mod at open time, off the LIVE item definition - which is what lets a mod that tints a
+  // seed per strain have every vial on the grid look like itself.
   shot.src = 's1://icon/' + row.id;
   pick.appendChild(shot);
-  // No name under the picture. The game's own tiles carry a vial and nothing else, and the bubble is where the
-  // words go - a nine-pixel name on a sixty-pixel tile was neither vanilla nor readable.
   pick.addEventListener('click', () => s1.call('picker.pick', row.id));
+  pick.addEventListener('mouseenter', () => showCard(row));
   tile.appendChild(pick);
 
   const star = el('button', 'star' + (row.fav ? ' on' : ''));
@@ -481,9 +497,22 @@ function tileNode(row, line) {
   });
   tile.appendChild(star);
 
-  // Only while the Hidden chip is on. A tile is sixty pixels wide and cannot carry two permanent buttons, and
-  // hiding things is a tidying-up job rather than something done in passing.
-  if (f.hidden) {
+  // Only while Hidden is on. A tile is sixty pixels wide and cannot carry two permanent buttons, and hiding
+  // things is a tidying-up job rather than something done in passing.
+  // THE BUBBLE, DRAWN BY THE RENDER THAT THE HOVER ALREADY CAUSED - not by a second write of its own.
+  //
+  // That is the whole of #69. The old bubble was built inside the `mouseenter` handler, which wrote to the
+  // DOM, which rebuilt the page, which destroyed and recreated every tile, which raised `mouseenter` again for
+  // the NEW object under a pointer that had not moved. About ten rounds a second with the mouse standing
+  // still - and, far worse than the wasted work, uGUI raises a click only when the press and the release land
+  // on the SAME object, so the tile a player pressed was destroyed several times before they let go and no
+  // click was ever raised. Nothing appeared in the log either, because there was no click to log.
+  //
+  // Here the hover sets `cardRow` and asks for ONE render; this line is part of that render. A second enter
+  // for the same row is refused by `showCard`, so the page settles after one rebuild and stays settled.
+  if (cardRow && cardRow.id === row.id) tile.appendChild(el('div', 'tip', row.name));
+
+  if (showHidden) {
     const hide = el('button', 'hide' + (row.hidden ? ' on' : ''), row.hidden ? 'o' : 'x');
     hide.addEventListener('click', () => {
       row.hidden = s1.call('picker.hide', row.id) === 'on';
@@ -493,7 +522,6 @@ function tileNode(row, line) {
     tile.appendChild(hide);
   }
 
-  if (view.tips !== false) bubble(pick, row, line);
   return tile;
 }
 
@@ -505,7 +533,7 @@ function grid(box, rows) {
       line = el('div', 'line');
       box.appendChild(line);
     }
-    line.appendChild(tileNode(row, line));
+    line.appendChild(tileNode(row));
   });
 
   // The last line is short, and a stretched tile would be a different size from the rest of the grid.
@@ -514,7 +542,7 @@ function grid(box, rows) {
   }
 }
 
-function renderRows() {
+function renderRows(rows) {
   const box = $('rows');
   box.replaceChildren();
 
@@ -533,7 +561,6 @@ function renderRows() {
     box.appendChild(line);
   }
 
-  const rows = visible();
   if (rows.length === 0) {
     box.appendChild(el('div', 'empty', query ? 'Nothing matches "' + query + '".' : 'Nothing to pick here.'));
     return;
@@ -560,11 +587,11 @@ function renderRows() {
   if (modded.length) {
     box.appendChild(el('div', 'section', (view.added || 'ADDED BY MODS').toUpperCase()));
 
-    // A sub-heading per tier, and only for tiers that are actually in the list: a tier nobody has reached
-    // yet must not announce itself by having an empty heading.
+    // A sub-heading per tier, and only for tiers that are actually in the list: a tier nobody has reached yet
+    // must not announce itself by having an empty heading.
     const tiers = [];
     for (const row of modded) if (tiers.indexOf(row.tier || 0) < 0) tiers.push(row.tier || 0);
-    tiers.sort((a, b) => (sort === 6 ? b - a : a - b));
+    tiers.sort((a, b) => (sortOfTab(tab) === 6 ? b - a : a - b));
 
     for (const tier of tiers) {
       if (tier > 0 && tiers.length > 1) box.appendChild(el('div', 'section sub', 'TIER ' + tier));
@@ -573,17 +600,100 @@ function renderRows() {
   }
 }
 
+/* ---- the footer ---------------------------------------------------------------------------------------- */
+
+function renderFoot() {
+  const box = $('foot');
+  box.replaceChildren();
+
+  if (view.hiddenCount || showHidden) {
+    const b = el('button', 'mini' + (showHidden ? ' on' : ''), 'Hidden (' + (view.hiddenCount || 0) + ')');
+    b.addEventListener('click', () => { showHidden = !showHidden; render(); });
+    box.appendChild(b);
+  }
+
+  // Only when something is actually on. A button that does nothing is worse than no button.
+  if (ticks.length || query || tab !== 'all') {
+    const b = el('button', 'mini', 'Clear');
+    b.addEventListener('click', () => {
+      ticks = [];
+      query = '';
+      $('find').value = '';
+      tab = 'all';
+      remember();
+      render();
+    });
+    box.appendChild(b);
+  }
+}
+
+/* ---- render -------------------------------------------------------------------------------------------- */
+
 function render() {
-  hideTip();
-  $('title').textContent = view.title || 'Select';
+  shell();
+
+  $('pageR').className = 'page right' + (opened ? '' : ' shut');
+
+  const title = view.title || 'Select';
+  $('title').textContent = title;
+  $('title2').textContent = title;
 
   const rows = visible();
   const all = (view.rows || []).length;
-  $('count').textContent = rows.length === all ? String(all) : rows.length + ' of ' + all;
+  const count = rows.length === all ? String(all) : rows.length + ' of ' + all;
+  $('count').textContent = count;
+  $('count2').textContent = count;
 
-  renderChips();
-  renderRows();
+  renderTabs(view.rows || []);
+  renderTicks();
+  renderRows(rows);
+  renderCard();
+  renderFoot();
 }
+
+/* ---- the flip ------------------------------------------------------------------------------------------ */
+
+/*
+  THE PAGE IS MOVED FRAME BY FRAME FROM SCRIPT, and that is not the first thing that was tried.
+
+  The parts are all here: `transform` renders on this surface (an inline `scaleX(0.35)` folds the page on the
+  spot), `transform-origin: left center` puts the hinge on the spine, and the engine has a transition runner
+  that interpolates scale. What does NOT happen is the tween. Measured with a 2400ms transition declared and a
+  screenshot every 130ms: the page was folded at rest, and fully open in the first frame after the write. No
+  intermediate was ever drawn, on either route into it - a class swap or an inline write.
+
+  So the interpolation is done here instead. Fourteen inline writes of `transform` over 300ms; each one is a
+  paint-only property, so each repaints ONE box rather than rebuilding the page, which is what makes this cheap
+  enough to do per frame. The easing is the cubic `ease-out` would have drawn.
+
+  It is worth knowing the difference: a transition that does not fire costs nothing and shows nothing, so a
+  page can carry one for months and read as if it animates. Only a burst of screenshots says otherwise.
+*/
+const FLIP_MS = 300;
+const FLIP_STEPS = 14;
+
+function flip() {
+  const page = $('pageR');
+  if (!page) { opened = true; return; }
+
+  let step = 0;
+  const timer = setInterval(() => {
+    step++;
+    const t = Math.min(1, step / FLIP_STEPS);
+    // The same shape `ease-out` draws, worked out here because the engine will not draw it - see above.
+    const eased = 1 - Math.pow(1 - t, 3);
+    page.style.transform = 'scaleX(' + eased.toFixed(3) + ')';
+
+    if (t < 1) return;
+    clearInterval(timer);
+    // Latch and draw once more. The rebuild replaces the box, which takes the inline transform with it, so
+    // nothing is left holding the page at a scale after the flip is over.
+    opened = true;
+    render();
+  }, Math.round(FLIP_MS / FLIP_STEPS));
+}
+
+/* ---- wiring -------------------------------------------------------------------------------------------- */
 
 $('find').addEventListener('input', (e) => {
   query = e.value || '';
@@ -591,6 +701,7 @@ $('find').addEventListener('input', (e) => {
 });
 
 $('back').addEventListener('click', () => s1.call('picker.back'));
+$('back2').addEventListener('click', () => s1.call('picker.back'));
 
 // The mod says when the underlying list moved - a category registered late, an item unlocked. Reloading the
 // whole view is right here: it is one call and the list is small enough that a diff would cost more to read
@@ -602,3 +713,4 @@ s1.on('picker.changed', () => {
 
 load();
 render();
+flip();

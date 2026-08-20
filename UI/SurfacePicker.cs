@@ -31,10 +31,30 @@ namespace Clipwise.UI
         private const float FallbackWidth = 540f;
         private const float FallbackHeight = 620f;
 
+        /// <summary>The spiral binder between the two pages, in the same CSS pixels the page is authored in. The
+        /// page draws the rings; this is only how much room the layout leaves for them.</summary>
+        private const float BinderWidth = 46f;
+
+        /// <summary>The wooden board the pages sit on, per side. The surface has to be bigger than the paper by
+        /// this much or there is no board to see.</summary>
+        private const float BoardEdge = 14f;
+
+        /// <summary>Room to the left of the board for the tabs to stick out into.</summary>
+        private const float TabRail = 44f;
+
         private static SurfaceHandle _surface;
         private static GameObject _host;
         private static View _view;
         private static Action<ItemDefinition> _onPick;
+
+        /// <summary>The measured spread, in CSS pixels, so the page can lay itself out without having to measure a
+        /// viewport it cannot see. Written by <see cref="Fit"/> and sent with the view.</summary>
+        private static float _pageW = FallbackWidth;
+        private static float _pageH = FallbackHeight;
+        private static float _spreadW = FallbackSpread;
+
+        /// <summary>The fallback spread: the same arithmetic <see cref="Fit"/> does, on the fallback page.</summary>
+        private const float FallbackSpread = TabRail + BoardEdge + FallbackWidth + BinderWidth + FallbackWidth + BoardEdge;
 
         internal static bool IsOpen => _host != null;
 
@@ -128,7 +148,7 @@ namespace Clipwise.UI
             rect.anchorMax = new Vector2(0.5f, 0.5f);
             rect.pivot = new Vector2(0.5f, 0.5f);
             rect.anchoredPosition = Vector2.zero;
-            rect.sizeDelta = new Vector2(FallbackWidth, FallbackHeight);
+            rect.sizeDelta = new Vector2(FallbackSpread, FallbackHeight);
 
             try
             {
@@ -138,8 +158,8 @@ namespace Clipwise.UI
 
                 if (card == null || card.parent == null)
                 {
-                    Core.Log.Warning("[Clipwise] no ItemSelector card to sit in - using " + FallbackWidth + "x" + FallbackHeight + ".");
-                    return FallbackWidth;
+                    Core.Log.Warning("[Clipwise] no ItemSelector card to sit in - using " + FallbackSpread + "x" + FallbackHeight + ".");
+                    return Mathf.Min(FallbackSpread, FallbackHeight);
                 }
 
                 // GetComponent, NOT `as`. Under IL2CPP a cast on the interop object handed back by .parent
@@ -152,7 +172,7 @@ namespace Clipwise.UI
                 if (holder == null)
                 {
                     Core.Log.Warning("[Clipwise] the ItemSelector has no RectTransform parent - using the fallback size.");
-                    return FallbackWidth;
+                    return Mathf.Min(FallbackSpread, FallbackHeight);
                 }
 
                 // NOT a check on the card: the game activates the selector screen in the very call this patch
@@ -162,7 +182,7 @@ namespace Clipwise.UI
                 if (!holder.gameObject.activeInHierarchy)
                 {
                     Core.Log.Warning("[Clipwise] the clipboard is not on screen - using the fallback size.");
-                    return FallbackWidth;
+                    return Mathf.Min(FallbackSpread, FallbackHeight);
                 }
 
                 // THE HOLDER FOR PLACE, THE PAPER FOR SIZE, and every part of that was learned from a
@@ -188,25 +208,73 @@ namespace Clipwise.UI
                 Vector2 size = paper.rect.size;
                 if (size.x < 1f || size.y < 1f) size = new Vector2(FallbackWidth, FallbackHeight);
 
+                // TWO PAGES WIDE, AND THE SURFACE HAS TO CARRY BOTH. The picker is a binder opened flat, so the
+                // host is no longer the size of vanilla's card - it is the card twice over, plus the binder
+                // between them, plus the board they lie on and the strip the tabs stick out into. The vanilla
+                // card is still what a single PAGE measures, which is why it is measured at all.
+                float pageW = size.x;
+                float pageH = size.y;
+                float wanted = TabRail + BoardEdge + pageW + BinderWidth + pageW + BoardEdge;
+
+                // NOT CLAMPED TO ANYTHING, and that took two measurements to accept.
+                //
+                // The clipboard is not drawn on a screen-sized canvas with the card inset into it. `ManagementCanvas`
+                // IS the card: 420x600, the same rect as the paper, with the Mask inside it at the same size. So
+                // every candidate for "how much room is there" answers 420, and clamping to any of them produced a
+                // page 151 pixels wide with 26-pixel tiles on it - correct arithmetic against the wrong box.
+                //
+                // A Canvas does not clip (only the Mask does, and this is out of it), so a rect wider than the
+                // canvas simply draws wider. That is also what the spread is meant to look like: the board grows
+                // sideways as the binder opens.
+                RectTransform canvasRect = canvasRoot.GetComponent<RectTransform>();
+                Core.LogDebug("[Clipwise] canvas '" + canvasRoot.name + "' rect "
+                              + (canvasRect != null ? canvasRect.rect.size.ToString() : "?")
+                              + ", scale " + canvasRoot.localScale + ".");
+
+                _pageW = pageW;
+                _pageH = pageH;
+                _spreadW = wanted;
+
+                // PLACED AGAINST THE HOLDER, THEN LIFTED OUT OF IT.
+                //
+                // The holder is where vanilla's card sits, so it is the only thing that answers "where on the
+                // screen does this belong". It is also a Mask exactly one page wide, and a spread parented into
+                // it is cut in half - uGUI does not clip by default, but a RectMask2D above you very much does.
+                //
+                // So: sized and centred under the holder, then re-parented to the canvas with
+                // worldPositionStays, which keeps the pixels exactly where they were and leaves the mask behind.
                 rect.SetParent(holder, false);
                 rect.anchorMin = new Vector2(0.5f, 0.5f);
                 rect.anchorMax = new Vector2(0.5f, 0.5f);
                 rect.pivot = new Vector2(0.5f, 0.5f);
                 rect.anchoredPosition = Vector2.zero;
-                rect.sizeDelta = size;
+                rect.sizeDelta = new Vector2(wanted, pageH);
                 rect.localScale = Vector3.one;
                 rect.localRotation = Quaternion.identity;
 
-                Core.Log.Msg("[Clipwise] surface " + size.x.ToString("0") + "x" + size.y.ToString("0")
-                             + " from '" + paper.name + "', centred in '" + holder.name + "' ("
-                             + holder.rect.width.ToString("0") + "x" + holder.rect.height.ToString("0") + ").");
+                rect.SetParent(canvasRoot, true);
 
-                return size.x;
+                // And slid right, so it is the LEFT PAGE that lands on vanilla's card rather than the middle of
+                // the spread. That is what makes the fold look like it opened out of the board the player was
+                // already looking at instead of the board jumping sideways.
+                rect.anchoredPosition += new Vector2(wanted * 0.5f - (TabRail + BoardEdge + pageW * 0.5f), 0f);
+
+                Core.Log.Msg("[Clipwise] surface " + wanted.ToString("0") + "x" + pageH.ToString("0")
+                             + " (page " + pageW.ToString("0") + ") from '" + paper.name + "', centred in '"
+                             + holder.name + "' (" + holder.rect.width.ToString("0") + "x"
+                             + holder.rect.height.ToString("0") + ").");
+
+                // THE SHORT SIDE, whichever it is. The host scales the page by
+                // `min(hostWidth, hostHeight) / designShortSide`, so handing it the smaller of the two is what
+                // keeps the scale at exactly 1 and the page authored in real pixels. Passing the width - which is
+                // what a one-page picker did, because the page WAS the short side - would scale the whole spread
+                // by about a half the moment it got wider than it is tall.
+                return Mathf.Min(wanted, pageH);
             }
             catch (Exception e)
             {
                 Core.Log.Warning("[Clipwise] could not place the surface: " + e.Message);
-                return FallbackWidth;
+                return Mathf.Min(FallbackSpread, FallbackHeight);
             }
         }
 
@@ -321,6 +389,17 @@ namespace Clipwise.UI
             var sb = new StringBuilder(1024);
             sb.Append("{\"title\":").Append(Quote(view.Title));
 
+            // THE SPREAD, MEASURED IN C# AND SENT. The page cannot ask how big it is: a surface answers layout
+            // coordinates and nothing about the viewport, so a script that wants to split a board into two pages
+            // has to be told where the fold is. These are the numbers `Fit` just measured, in the same CSS pixels
+            // the page is authored in.
+            sb.Append(",\"w\":").Append(_spreadW.ToString("0.##", Culture))
+              .Append(",\"h\":").Append(_pageH.ToString("0.##", Culture))
+              .Append(",\"pageW\":").Append(_pageW.ToString("0.##", Culture))
+              .Append(",\"binder\":").Append(BinderWidth.ToString("0.##", Culture))
+              .Append(",\"edge\":").Append(BoardEdge.ToString("0.##", Culture))
+              .Append(",\"rail\":").Append(TabRail.ToString("0.##", Culture));
+
             // The heading over everything a mod added, taken from the category its own rows are in. Worked out
             // here rather than in the page: a category key is namespaced (`clipwise:vanilla`), and the page
             // guessing at that shape printed the game's own seeds under the heading "VANILLA" twice.
@@ -401,6 +480,19 @@ namespace Clipwise.UI
                   .Append(",\"growth\":").Append(Growth(row).ToString(Culture))
                   .Append(",\"value\":").Append((row.Facts?.MarketValue ?? 0f).ToString("0.##", Culture))
                   .Append(",\"tags\":").Append(Tags(row))
+                  // The rest of what the game itself knows about this item. Sent because the detail card shows
+                  // one line per fact that HAS a value and leaves the row out otherwise - a card that promises a
+                  // field and shows nothing under it is worse than a shorter card.
+                  .Append(",\"product\":").Append(Quote(row.Facts?.ProductName))
+                  .Append(",\"drug\":").Append(Quote(row.Facts?.DrugType))
+                  .Append(",\"buy\":").Append((row.Facts?.PurchasePrice ?? 0f).ToString("0.##", Culture))
+                  .Append(",\"harvest\":").Append(Quote(row.Facts?.HarvestTarget))
+                  // Which mod filed this entry, or null when only the classifier placed it. The card names it so
+                  // a player can see where a strain came from without opening the mod list.
+                  .Append(",\"source\":").Append(Quote(row.Source))
+                  // What the registering mod itself wants on the card, asked NOW rather than remembered - the
+                  // one fact that needs it is a player's own name, which they can change at any desk.
+                  .Append(",\"facts\":").Append(ExtraFacts(row))
                   .Append('}');
             }
             sb.Append("]}");
@@ -435,6 +527,24 @@ namespace Clipwise.UI
                 if (!first) sb.Append(',');
                 first = false;
                 sb.Append(Quote(tag));
+            }
+            return sb.Append(']').ToString();
+        }
+
+        /// <summary>The rows the registering mod supplied for this item, as a JSON array of label/value pairs,
+        /// or <c>[]</c>. See <see cref="Catalog.Facts"/> for why they are asked rather than stored.</summary>
+        private static string ExtraFacts(Row row)
+        {
+            var rows = Catalog.Facts(row?.Source, row?.ItemId);
+            if (rows.Count == 0) return "[]";
+
+            var sb = new StringBuilder(64);
+            sb.Append('[');
+            for (int i = 0; i < rows.Count; i++)
+            {
+                if (i > 0) sb.Append(',');
+                sb.Append("{\"k\":").Append(Quote(rows[i].Key))
+                  .Append(",\"v\":").Append(Quote(rows[i].Value)).Append('}');
             }
             return sb.Append(']').ToString();
         }

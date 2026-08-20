@@ -1,26 +1,84 @@
 <link rel="stylesheet" href="app.css">
 
-<div class="card">
-  <div class="head">
-    <button class="back" id="back">&lt; Back</button>
-    <span class="head-title" id="title">Seed</span>
-    <span class="head-count" id="count"></span>
+<!--
+  THE SHELL, AND THEN ONE SCREEN INSIDE IT.
+
+  Everything from `.board` down to `#pageL` / `#pageR` is the CLIPBOARD, not the seed picker: the wooden board,
+  the clip, the paper, the spiral and the tab rail. Every clipboard screen this mod draws sits in it - items,
+  equipment, employees, seeds - because `ItemFieldUI.Clicked` is one patch for every field and this is the one
+  page it mounts. A second screen fills `#pageL` and `#pageR` differently and touches nothing above them.
+
+  Keep that line where it is. The moment a screen re-declares the board or the binder there are two of them to
+  keep in step, and the mock-up this was built from already showed what that looks like: a page pasted onto a
+  photograph of a notebook, with the seam visible in the paper.
+
+  The binder, opened flat.
+
+  Left to right: the strip the tabs stick out into, then the wooden board, and on it the two pages with the
+  spiral between them. Everything inside `.wood` is paper; everything outside it is board.
+
+  The widths are NOT in the stylesheet. A surface page cannot measure its own viewport, so the mod measures
+  vanilla's own card and sends the numbers with the view - see `w`, `pageW`, `binder`, `edge` and `rail` in
+  SurfacePicker.ViewJson. app.js writes them onto these boxes on the first render.
+-->
+<div class="board" id="board">
+
+  <div class="wood" id="wood">
+
+    <!-- ON the board, not beside it. Beside it they were sliced in half: the surface hangs in the world in
+         front of the clipboard, and the clipboard's own wooden frame is nearer the camera than the canvas
+         plane, so anything drawn to the left of vanilla's card is behind vanilla's board. On the board they are
+         on the mod's own pixels and always whole - and they still stick out to the left of the paper, which is
+         what the drawing shows. -->
+    <div class="rail" id="rail"></div>
+
+    <div class="spread" id="spread">
+
+      <!-- SLOT: the left page. -->
+      <div class="page left" id="pageL">
+        <div class="head">
+          <button class="back" id="back">&lt; Back</button>
+          <span class="head-title" id="title">Seed</span>
+          <span class="head-count" id="count"></span>
+        </div>
+        <div class="rule"></div>
+        <div class="list" id="rows"></div>
+      </div>
+
+      <div class="binder" id="binder"></div>
+
+      <!-- SLOT: the right page. `shut` is the folded state the flip opens out of - see app.js. -->
+      <div class="page right shut" id="pageR">
+        <div class="head">
+          <button class="back" id="back2">&lt; Back</button>
+          <span class="head-title" id="title2">Seed</span>
+          <span class="head-count" id="count2"></span>
+        </div>
+        <div class="rule"></div>
+
+        <!-- No data-typing. It keeps the caret in this field whenever nothing else holds one, and a caret in a
+             field is what stops the GAME seeing keys at all - including the Escape that closes this page. Click
+             the box to type. -->
+        <input class="find" id="find" placeholder="Search" maxlength="40">
+
+        <div class="fx" id="fx"></div>
+
+        <div class="card" id="card"></div>
+
+        <div class="foot" id="foot"></div>
+      </div>
+
+    </div>
+
+    <!-- The bulldog clip, over the top of the left page. LAST in the box, because paint order here is document
+         order and there is no z-index - written before the pages it would be drawn underneath them. Placed by
+         the script, because where the middle of a page is depends on how wide vanilla drew its own card. -->
+    <div class="clip" id="clip">
+      <div class="clip-hole"></div>
+      <div class="clip-hole"></div>
+    </div>
+
   </div>
-
-  <div class="rule"></div>
-
-  <!-- No data-typing. It keeps the caret in this field whenever nothing else holds one, and a caret in a
-       field is what stops the GAME seeing keys at all - including the Escape that closes this page. Click
-       the box to type. -->
-  <input class="find" id="find" placeholder="Search" maxlength="40">
-
-  <div class="chips" id="chips"></div>
-
-  <!-- The open drop-down's tick list. Under the bar rather than over the grid, so nothing is dismissed by
-       accident and the page needs no second click to close it. -->
-  <div class="drop closed" id="drop"></div>
-
-  <div class="list" id="rows"></div>
 </div>
 
 <script src="app.js"></script>

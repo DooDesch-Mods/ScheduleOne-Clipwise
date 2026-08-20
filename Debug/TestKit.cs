@@ -62,7 +62,7 @@ namespace Clipwise.Debugging
             if (cmd != "cwhelp" && cmd != "cwcats" && cmd != "cwdump" && cmd != "cwconflicts"
              && cmd != "cwnamecheck" && cmd != "cwauto" && cmd != "cwreload" && cmd != "cwopen"
              && cmd != "cwtab" && cmd != "cwsearch" && cmd != "cwvanilla" && cmd != "cwrect"
-             && cmd != "cwboard" && cmd != "cwpng" && cmd != "cwfield")
+             && cmd != "cwboard" && cmd != "cwpng" && cmd != "cwfield" && cmd != "cwphone")
                 return false;
 
             // Both SubmitCommand overloads can fire for one submission (the string body calls the list body),
@@ -88,6 +88,7 @@ namespace Clipwise.Debugging
                     case "cwvanilla": Vanilla(); break;
                     case "cwrect": Rects(); break;
                     case "cwboard": Board(); break;
+                    case "cwphone": Phone(); break;
                     case "cwpng": DumpIcons(); break;
                     case "cwtab":
                     case "cwsearch": Filtering(); break;
@@ -424,6 +425,31 @@ namespace Clipwise.Debugging
 
             clipboard.Open(selection, null);
             Say("Clipwise: clipboard open on '" + pot.gameObject.name + "'. Run cwboard again to close it.");
+        }
+
+        /// <summary>
+        /// Put the phone away.
+        ///
+        /// Not a convenience. The picker hangs in the WORLD in front of the clipboard, and an open phone is a
+        /// tilted object nearer the camera - so wherever the two overlap the phone wins the depth test and the
+        /// right-hand page is a black rectangle in every screenshot. A player never meets it, because the phone
+        /// blocks the interaction that opens a clipboard in the first place; only `cwboard` can put the two on
+        /// screen at once, and only a screenshot has to care.
+        ///
+        /// A command and not a key, for the reason every dev entry point here is: the harness can run a command
+        /// and cannot press a key.
+        /// </summary>
+        private static void Phone()
+        {
+            try
+            {
+                var phone = PlayerSingleton<Il2CppScheduleOne.UI.Phone.Phone>.Instance;
+                if (phone == null) { Complain("Clipwise: no Phone in this scene."); return; }
+
+                phone.SetIsOpen(false);
+                Say("Clipwise: phone stowed.");
+            }
+            catch (Exception e) { Complain("Clipwise: could not stow the phone: " + e.Message); }
         }
 
         /// <summary>
