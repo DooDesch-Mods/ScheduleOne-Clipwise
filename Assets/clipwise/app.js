@@ -463,17 +463,35 @@ function renderDock() {
 */
 let shown = null;
 
+/*
+  WHICH TILE, not which seed.
+
+  A starred seed is drawn TWICE - once under Favourites and once in its own tier group - and both tiles carry
+  the same row object with the same id. Keyed by the row, "is this the hovered one" was true in both places at
+  once, so pointing at the favourite lit its label AND the label of the copy further down the page.
+
+  So a tile is numbered as it is built, in render order, and the number is what the hover is remembered by. It
+  is stable across a rebuild - the same list builds the same tiles in the same order - which is what keeps the
+  loop below closed: the tile the pointer is on comes back with the number it had.
+*/
+let shownAt = 0;
+
+/** Handed to every tile as it is built - see `shownAt`. Reset per render, so the numbers are the positions. */
+let slots = 0;
+
 /** The Any tile has no row of its own, so it points at this. Compared by identity, never by id. */
 const ANY = { id: ' any', name: 'Any' };
 
-/* Whose label has already faded up. See `fillTip` - it is what stops the fade restarting itself. */
-let faded = null;
+/* Which tile's label has already faded up. See `fillTip` - it is what stops the fade restarting itself. */
+let faded = 0;
 
-function showRecord(row) {
-  if (shown === row) return;
-  if (shown && row && shown.id === row.id) return;
+function showRecord(row, slot) {
+  const at = slot || 0;
+  if (shown === row && shownAt === at) return;
+  if (shown && row && shown.id === row.id && shownAt === at) return;
   shown = row;
-  faded = null;
+  shownAt = at;
+  faded = 0;
   render();
 }
 
@@ -786,14 +804,21 @@ function tipWidth(name, tier) {
 */
 function tipNode() {
   const tip = el('div', 'tip');
+
+  // AS TALL AS THE TILE IT POINTS AT, which is a number the stylesheet does not have - see tileSize. The slip
+  // inside is centred in that height, so the tile's middle, the slip's middle and the arrow are ONE line
+  // instead of three. Sitting at the top of the line with a fixed offset, the arrow came out level with the
+  // tile's centre but near the BOTTOM edge of a slip that is only thirty pixels tall.
+  tip.style.height = TILE + 'px';
+
   const body = el('div', 'tip-body');
   body.appendChild(el('div', 'tip-name', ''));
   body.appendChild(el('div', 'tip-tier', ''));
   tip.appendChild(body);
 
-  // Level with the middle of the tile, which is a number the stylesheet does not have - see tileSize.
+  // Half the tile, less half the arrow: the middle of the tile, the middle of the slip, the same number.
   const arrow = el('div', 'tip-arrow');
-  arrow.style.top = Math.round(TILE / 2 - 10) + 'px';
+  arrow.style.top = Math.round(TILE / 2 - 4) + 'px';
   tip.appendChild(arrow);
   return tip;
 }
@@ -807,7 +832,7 @@ function tipNode() {
   already lit and schedules nothing, so the worst case is one extra rebuild and a fade that is cut short, never
   a loop.
 */
-function fillTip(node, row, col, indent) {
+function fillTip(node, row, col, indent, slot) {
   if (!node) return;
 
   const name = row.name || row.id;
@@ -827,13 +852,13 @@ function fillTip(node, row, col, indent) {
   // `up` is what makes the label exist at all; `on` is what fades it in. Both are class writes on a node that
   // is already there - see tipNode.
   const base = 'tip up' + (flip ? ' flip' : '');
-  const lit = faded === row.id;
+  const lit = faded === slot;
   node.className = base + (lit ? ' on' : '');
   if (lit) return;
 
   setTimeout(() => {
-    if (!shown || shown.id !== row.id || faded === row.id) return;
-    faded = row.id;
+    if (shownAt !== slot || faded === slot) return;
+    faded = slot;
     node.className = base + ' on';
   }, 0);
 }
@@ -859,7 +884,7 @@ function holeNode() {
 
 /** One tile: the seed's own picture and its star. Pointing at it fills the record on the facing sheet and the
     label on its own line. */
-function tileNode(row) {
+function tileNode(row, slot) {
   const tile = el('div', 'tile' + (row.sel ? ' sel' : ''));
 
   // A button, not a div: the engine wires a hit target unconditionally for button, a, input and textarea.
@@ -875,7 +900,8 @@ function tileNode(row) {
   pick.appendChild(picture || el('span', 'shot-mark', initials(row.name || row.id)));
   sizeTile(tile, pick, picture);
   pick.addEventListener('click', () => s1.call('picker.pick', row.id));
-  pick.addEventListener('mouseenter', () => showRecord(row));
+  // The TILE, not the seed: a favourite is on the page twice and only one of them is under the pointer.
+  pick.addEventListener('mouseenter', () => showRecord(row, slot));
   tile.appendChild(pick);
 
   const star = el('button', 'star' + (row.fav ? ' on' : ''));
@@ -929,10 +955,15 @@ function grid(box, rows, indent) {
 
   for (const row of rows) {
     if (!line || col === PER_ROW) open();
-    line.appendChild(tileNode(row));
 
-    // The line's own label, filled only for the seed the pointer is on.
-    if (view.tips !== false && shown && shown !== ANY && shown.id === row.id) fillTip(tip, row, col, indent);
+    // Numbered as it is built - see `shownAt`. Never from the index: the same seed is drawn in Favourites and
+    // again in its tier group, and those two tiles have to be able to answer differently.
+    const slot = ++slots;
+    line.appendChild(tileNode(row, slot));
+
+    // The line's own label, filled only for the TILE the pointer is on.
+    if (view.tips !== false && shown && shown !== ANY && shown.id === row.id && shownAt === slot)
+      fillTip(tip, row, col, indent, slot);
     col++;
   }
 
@@ -1066,6 +1097,10 @@ function renderRows(rows) {
   const box = $('rows');
   box.replaceChildren();
 
+  // The tile numbers are positions in THIS render - see `shownAt`. Reset here, before the first tile is made,
+  // so the same list hands the same tile the same number every time it is rebuilt.
+  slots = 0;
+
   pendingLead = view.none ? anyTile() : null;
 
   if (rows.length === 0) {
@@ -1105,6 +1140,39 @@ function renderRows(rows) {
   for (const key of keys) modSection(box, key, modded.filter((row) => (row.tab || '') === key));
 }
 
+/* ---- the head -------------------------------------------------------------------------------------------- */
+
+/*
+  "SEED" STANDS IN THE MIDDLE OF THE SHEET, and that is not what a row of three flex items does on its own.
+
+  With the title at `flex: 1` between Back and the count, its middle is the middle of what those two LEFT OVER -
+  Back is fifty-five pixels and a count is seven, so the word sat twenty-four pixels right of the sheet's middle
+  and moved again the moment the count went from "7" to "12 of 723". The design's own head has it centred on the
+  sheet, and a title that shifts when a filter is typed is a title nobody can find twice.
+
+  So the narrower end is padded out to the width of the wider one. What is left for the title is then equal on
+  both sides, whatever either end says, and its middle is the sheet's.
+
+  MEASURED, NOT ESTIMATED. `rect()` answers for the LAST render, which is exactly right for these two: neither
+  is ever rebuilt - the head is markup and a render only writes text into it - so their widths are a frame old
+  only in the render where the count's own text changed, and correct in every other. The fallbacks are for the
+  very first render, before anything has been laid out at all and every rect reads as zero.
+*/
+function widthOf(node, fallback) {
+  if (!node || typeof node.rect !== 'function') return fallback;
+  const box = node.rect();
+  const w = box ? Math.round(box.width) : 0;
+  return w > 0 ? w : fallback;
+}
+
+function centreHead() {
+  const back = widthOf($('back'), 56);
+  const count = widthOf($('count'), String($('count').textContent || '').length * 7);
+
+  $('padL').style.width = Math.max(0, count - back) + 'px';
+  $('padR').style.width = Math.max(0, back - count) + 'px';
+}
+
 /* ---- render ---------------------------------------------------------------------------------------------- */
 
 function render() {
@@ -1120,6 +1188,7 @@ function render() {
   const rows = visible();
   const all = (view.rows || []).length;
   $('count').textContent = rows.length === all ? String(all) : rows.length + ' of ' + all;
+  centreHead();
 
   renderChips();
   renderRows(rows);

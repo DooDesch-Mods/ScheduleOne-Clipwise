@@ -44,13 +44,39 @@ namespace Clipwise.UI
         /// </summary>
         private static readonly HashSet<string> _failed = new HashSet<string>(StringComparer.Ordinal);
 
-        /// <summary>Longest this may spend in one open. A picker that takes half a second to appear is a worse
-        /// bug than a grid whose last tiles are lettered, and the next open continues where this one stopped.</summary>
-        private const int BudgetMs = 250;
+        /// <summary>
+        /// Longest the OPENING pass may spend. A picker that takes half a second to appear is a worse bug than a
+        /// grid whose last tiles are lettered.
+        ///
+        /// WHAT THIS NUMBER USED TO DECIDE, AND MUST NOT AGAIN. It was the only pass there was, so it was also the
+        /// ceiling on how many pictures a save could ever have at once - and the rows are sorted with the game's
+        /// own category first (ViewBuilder.SortVanilla), so the ones it cut off were always a mod's. Measured with
+        /// a save carrying 21 bred strains and the budget forced to 20ms: "6 made, 20 left for the next open",
+        /// every vanilla vial drawn and every bred one lettered, which is the report exactly. At the real 250ms it
+        /// takes about seventy, so it bit any save past that and never announced itself as anything but a grid of
+        /// initials. <see cref="Rest"/> is what finishes the rest now; this only decides how much is paid for in
+        /// the frame the clipboard opens.
+        /// </summary>
+        internal const int OpenBudgetMs = 250;
 
-        internal static void Supply(SurfaceHandle surface, View view)
+        /// <summary>What a later frame may spend. Small enough to disappear into a frame that also draws the
+        /// world - the picker is up and the player is reading it while this runs.</summary>
+        internal const int FrameBudgetMs = 6;
+
+        /// <summary>The longest side of the picture that leaves here - see <see cref="Encode"/>.</summary>
+        private const int MaxSide = 128;
+
+        /// <summary>
+        /// Convert what is left of <paramref name="view"/>'s icons, for at most <paramref name="budgetMs"/>.
+        ///
+        /// Returns how many pictures this pass added. <paramref name="more"/> says whether anything is still
+        /// waiting, which is what lets the caller come back next frame instead of leaving a grid of initials up
+        /// until the player closes the clipboard and opens it again.
+        /// </summary>
+        internal static int Supply(SurfaceHandle surface, View view, int budgetMs, bool announce, out bool more)
         {
-            if (view == null || surface == null) return;
+            more = false;
+            if (view == null || surface == null) return 0;
 
             var watch = Stopwatch.StartNew();
             int made = 0, skipped = 0, bare = 0;
@@ -60,7 +86,7 @@ namespace Clipwise.UI
                 if (row == null || string.IsNullOrEmpty(row.ItemId)) continue;
                 if (_done.Contains(row.ItemId) || _failed.Contains(row.ItemId)) continue;
 
-                if (watch.ElapsedMilliseconds > BudgetMs) { skipped++; continue; }
+                if (watch.ElapsedMilliseconds > budgetMs) { skipped++; more = true; continue; }
 
                 // THE LIVE DEFINITION FIRST, and the cached facts only as a fallback.
                 //
@@ -104,11 +130,17 @@ namespace Clipwise.UI
             // ALWAYS SAID, INCLUDING THE ALL-ZERO CASE. The old line was printed only when something HAPPENED, so
             // an open where every remaining row had no sprite yet logged nothing at all - and a grid of empty
             // tiles with a silent log reads as a page that never asked for its pictures.
-            Core.LogDebug("[Clipwise] icons: " + made + " made in " + watch.ElapsedMilliseconds + "ms"
-                          + ", " + _done.Count + " ready"
-                          + (bare > 0 ? ", " + bare + " with no sprite yet" : "")
-                          + (skipped > 0 ? ", " + skipped + " left for the next open" : "")
-                          + (_failed.Count > 0 ? ", " + _failed.Count + " that will not convert" : ""));
+            //
+            // Not from the per-frame passes, now that there are sixty of those a second: the opening pass says
+            // what it did, and the frames after it are summed up in one line when they finish - see Rest.
+            if (announce)
+                Core.LogDebug("[Clipwise] icons: " + made + " made in " + watch.ElapsedMilliseconds + "ms"
+                              + ", " + _done.Count + " ready"
+                              + (bare > 0 ? ", " + bare + " with no sprite yet" : "")
+                              + (skipped > 0 ? ", " + skipped + " left for a later frame" : "")
+                              + (_failed.Count > 0 ? ", " + _failed.Count + " that will not convert" : ""));
+
+            return made;
         }
 
         /// <summary>Whether this item's picture is in the store, so the page can draw a letter instead of an empty
@@ -134,9 +166,19 @@ namespace Clipwise.UI
                 Texture2D source = sprite.texture;
                 if (source == null) return null;
 
+                // NO BIGGER THAN THE TILE WILL EVER BE, and that is the difference between seventy pictures in a
+                // frame and three hundred. A seed vial's sprite is 73x225 and a tile is at most 74 css pixels
+                // square: the old clamp kept both numbers, so every icon was blitted, read back and PNG-encoded at
+                // 225x225 to be drawn at a third of that. The longest side is held to 128 - still generous against
+                // a 74px tile - and the two sides are scaled together, because a clamp per side squashes a tall
+                // picture instead of shrinking it.
                 Rect area = sprite.textureRect;
-                int w = Mathf.Clamp(Mathf.RoundToInt(area.width), 1, 256);
-                int h = Mathf.Clamp(Mathf.RoundToInt(area.height), 1, 256);
+                int sw = Mathf.Max(1, Mathf.RoundToInt(area.width));
+                int sh = Mathf.Max(1, Mathf.RoundToInt(area.height));
+
+                float k = Mathf.Min(1f, (float)MaxSide / Mathf.Max(sw, sh));
+                int w = Mathf.Max(1, Mathf.RoundToInt(sw * k));
+                int h = Mathf.Max(1, Mathf.RoundToInt(sh * k));
 
                 rt = RenderTexture.GetTemporary(w, h, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
 
