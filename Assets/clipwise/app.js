@@ -492,7 +492,7 @@ let slots = 0;
   A HOVER MUST NOT REBUILD THE CATALOGUE. Two things change when the pointer moves to another tile - the record
   on the facing sheet and which line's label carries a word - and both are writes to nodes that already exist.
   Reaching them through `render()` meant `renderRows` opened with `replaceChildren`, so every tile on the page
-  was thrown away and made again: a tile is five nodes, a starred seed is drawn twice, and several hundred seeds
+  was thrown away and made again: a tile is three nodes, a starred seed is drawn twice, and several hundred seeds
   therefore cost a few thousand nodes rebuilt per tile crossed. This is the handle that makes the write
   targeted. Filled as the grid is built, thrown away with the grid.
 */
@@ -1028,21 +1028,25 @@ function hideTip(slot) {
 }
 
 /** Square, at whatever size the sheet allowed this render. The picture is inset by the same six pixels the
-    design has at 57. */
-function sizeTile(tile, shot, picture) {
+    design has at 57 - and that inset is the shot's own `padding`, because the shot IS the picture.
+
+    An `<img>` is drawn inside its CONTENT box (Sideload/Paint/Painter.cs:1200-1208), so a 61px box with 2px
+    of padding puts a 57px vial exactly where a 57px child of a 61px button used to sit.
+
+    ONLY THE HEIGHT IS WRITTEN HERE. The width is the tile's content box, and that is not the same number on
+    every tile: the Any tile's border is 1.6px, so its shot is 59.8 wide where a seed's is 61. Written as 61
+    for both, the Any tile's cross moved half a pixel off centre - see tileNode for the one shot that does
+    need a width of its own. */
+function sizeTile(tile, shot) {
   tile.style.width = TILE + 'px';
   tile.style.height = TILE + 'px';
   if (shot) shot.style.height = (TILE - 2) + 'px';
-  if (picture) {
-    picture.style.width = (TILE - 6) + 'px';
-    picture.style.height = (TILE - 6) + 'px';
-  }
 }
 
 /** Keeps the place of a tile on a short last line. */
 function holeNode() {
   const hole = el('div', 'tile hole');
-  sizeTile(hole, null, null);
+  sizeTile(hole, null);
   return hole;
 }
 
@@ -1051,18 +1055,26 @@ function holeNode() {
 function tileNode(row, slot) {
   const tile = el('div', 'tile' + (row.sel ? ' sel' : ''));
 
-  // A button, not a div: the engine wires a hit target unconditionally for button, a, input and textarea.
+  // THE PICTURE IS THE BUTTON. A vial used to be an `<img>` inside a `<button>`, and the two of them are two
+  // uGUI boxes at about 0.45ms each on every write to the document - see the rebuild cost at the top of this
+  // file. The `<img>` carries the click itself instead: anything the script listens to gets a hit target of
+  // its own, button or not (Sideload/Host/WebView.cs:1171), and the sprite is drawn inside the content box,
+  // so the picture keeps exactly the pixels it had as a child.
   //
   // `shot-item` carries no style. It exists so a test can aim at a seed: the Any tile is also a `.shot` and is
   // drawn FIRST, so `sideload_click .shot` clears the field instead of choosing anything - which reads exactly
   // like the click being broken, and cost a whole diagnosis round.
-  const pick = el('button', 'shot shot-item');
-  // Supplied by the mod at open time, off the LIVE item definition - which is what lets a mod that tints a seed
-  // per strain have every vial on the grid look like itself. `icon` is false when the store has none, and then
-  // the pen writes the initials rather than the tile drawing an empty box - see `.shot-mark`.
-  const picture = row.icon === false ? null : img('shot-img', 's1://icon/' + row.id);
-  pick.appendChild(picture || el('span', 'shot-mark', initials(row.name || row.id)));
-  sizeTile(tile, pick, picture);
+  //
+  // The src is supplied by the mod at open time, off the LIVE item definition - which is what lets a mod that
+  // tints a seed per strain have every vial on the grid look like itself. `icon` is false when the store has
+  // none, and then the pen writes the initials rather than the tile drawing an empty box - see `.shot-mark`.
+  const pick = row.icon === false
+    ? el('button', 'shot shot-item shot-mark', initials(row.name || row.id))
+    : img('shot shot-item shot-img', 's1://icon/' + row.id);
+  sizeTile(tile, pick);
+  // A picture is not stretched to its box the way a button is: the layout runs without Unity, cannot open a
+  // PNG, and an image with no width is a box of nothing. A seed's tile has a 1px border on both sides.
+  if (row.icon !== false) pick.style.width = (TILE - 2) + 'px';
   // Not while the sheet is folding away: the tiles are still on screen and still take a click, and a seed
   // chosen after the player asked to leave is written to the pot exactly as if they had meant it.
   pick.addEventListener('click', () => { if (!closing) s1.call('picker.pick', row.id); });
@@ -1072,8 +1084,9 @@ function tileNode(row, slot) {
   pick.addEventListener('mouseleave', () => leaveRecord(slot));
   tile.appendChild(pick);
 
-  const star = el('button', 'star' + (row.fav ? ' on' : ''));
-  star.appendChild(img('star-img', 'star.png'));
+  // The same trade as the vial above: one box, not two. The button was fifteen pixels so that the mark had a
+  // target around it, and the picture is still eleven - the four pixels are the image's own `padding` now.
+  const star = img('star' + (row.fav ? ' on' : ''), 'star.png');
   // The star stands ON the tile, so drifting five pixels onto it has not left the seed - it says so itself
   // rather than letting the picture's own leave take the slip away.
   star.addEventListener('mouseenter', () => showRecord(row, slot));
@@ -1267,7 +1280,7 @@ function anyTile() {
   pick.addEventListener('click', () => { if (!closing) s1.call('picker.pick', ''); });
   pick.addEventListener('mouseenter', () => showRecord(ANY));
   tile.appendChild(pick);
-  sizeTile(tile, pick, null);
+  sizeTile(tile, pick);
   return tile;
 }
 
