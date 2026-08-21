@@ -457,10 +457,13 @@ body {
 /* The whole tile is the target. The star sits on top of it rather than inside, so starring and choosing
    stay two separate clicks.
 
-   CENTRED ON BOTH AXES, and it has to be said rather than left to the padding. This was 4px at the top
-   against 2px at the bottom, so every vial sat a pixel high in its tile - which is what "not centered like
-   the vanilla tiles" is. `align-items` alone only settles the cross axis; the column's own axis is
-   `justify-content`, and without it the picture hangs from the top whatever the padding says. */
+   THE SHOT IS THE PICTURE ITSELF - an `<img>` for a seed, a `<button>` for one with no picture. The two
+   pixels of padding are what inset the vial inside the tile, and they are the same two the picture used to
+   sit at as a separate child.
+
+   `align-items` and `justify-content` are for the initials: the picture is placed by the padding, the words
+   are placed by these. `align-items` alone only settles the cross axis; the column's own axis is
+   `justify-content`, and without it the letters hang from the top whatever the padding says. */
 .shot {
   padding: 2px;
   background: transparent;
@@ -478,7 +481,8 @@ body {
    comes out dark. White is "leave it alone". The square is honest because the mod pads every icon to one
    before it sends it - a seed vial's own sprite is one to three and would arrive squashed otherwise.
 
-   Sized in script with the tile it sits in - see `.tile`. */
+   Sized in script with the tile it sits in - see `.tile`. The size written there is the whole box; the
+   sprite is drawn inside it, less `.shot`'s padding. */
 .shot-img {
   color: #ffffff;
 }
@@ -500,9 +504,10 @@ body {
    An `<img>` whose `s1://` name is not in the store draws nothing at all, so a strain catalogue that has
    registered its seeds but not yet dressed them put ten empty grey boxes in the grid - which reads as a broken
    page rather than as a picture that has not arrived. The pen writes the name's initials instead, in the same
-   faint hand a placeholder is written in. */
+   faint hand a placeholder is written in.
+
+   This IS the shot when a seed has no picture, so it is sized in script like any other and needs no `flex`. */
 .shot-mark {
-  flex: 1;
   font-family: game-hand;
   font-size: 20px;
   color: #7d89a5;
@@ -536,28 +541,26 @@ body {
 /* ---- the star -------------------------------------------------------------------------------------------- */
 
 /* Over the tile's top right corner, and ITS OWN CLICK TARGET - never the tile's. `position: fixed` is measured
-   from the viewport, so this is placed by the tile it sits in rather than by the page. The button is bigger
-   than the picture on purpose: eleven pixels is a mark, not a target. */
+   from the viewport, so this is placed by the tile it sits in rather than by the page.
+
+   THE BOX IS THE TARGET AND THE PADDING IS THE MARK. Fifteen pixels wide with two of padding leaves an eleven
+   pixel star - the size it has always been drawn at - while the pointer still has the full fifteen to hit.
+   Eleven pixels is a mark, not a target, and the button that used to hold the mark is one uGUI box per tile.
+
+   The picture is white; `color` tints it. Its size comes from CSS alone - the HTML width and height attributes
+   never reach the layout, which runs without Unity and cannot read a PNG. */
 .star {
   position: absolute;
   top: 0;
   right: 0;
   width: 15px;
   height: 15px;
+  padding: 2px;
   background: transparent;
-  align-items: center;
-  justify-content: center;
-}
-
-/* The picture is white; `color` tints it. Its size comes from CSS alone - the HTML width and height
-   attributes never reach the layout, which runs without Unity and cannot read a PNG. */
-.star-img {
-  width: 11px;
-  height: 11px;
   color: #b3b7bd;
 }
 
-.star.on .star-img { color: #e0a72c; }
+.star.on { color: #e0a72c; }
 
 /* The opposite corner from the star, and only drawn while the Hidden chip is on. */
 .hide {
