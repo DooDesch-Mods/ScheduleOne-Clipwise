@@ -506,6 +506,28 @@ let slipAt = 0;
 /** The Any tile has no row of its own, so it points at this. Compared by identity, never by id. */
 const ANY = { id: ' any', name: 'Any' };
 
+/*
+  EVERY TILE ON THE PAGE THAT SHOWS THE SAME ITEM, by item id. Only filled while building a slot filter's list.
+
+  Two reasons it is a list per id rather than one node. A starred item is drawn twice - once in Favourites and
+  once under its own heading - and ticking one of them has to tick the other, or the page says two different
+  things about one filter. And the tick is written as an inline `outline`, which is a paint-only property
+  (Sideload/Css/PaintOnlyProperties.cs): it repaints the single box it was written to and does NOT rebuild the
+  page. That is the whole reason a filter can be built without the list flickering - a class change would cost a
+  full rebuild per tile clicked, which at two hundred rows is a third of a second each.
+
+  Thrown away with the grid, like `tipAt`.
+*/
+let tickAt = {};
+
+/** Draws the tick, or takes it away, on every copy of one item. `none` rather than a width of zero: an outline
+    takes no room either way, and "none" is what the style applier reads as off. */
+function markTick(itemId, on) {
+  const nodes = tickAt[itemId];
+  if (!nodes) return;
+  for (const node of nodes) node.style.outline = on ? '2px solid #3a3d42' : 'none';
+}
+
 /** A class write that is skipped when it would change nothing: every write to the document rebuilds the page,
     so a write that says what the node already says costs a whole rebuild for no change at all. */
 function setClass(node, name) {
@@ -1053,7 +1075,15 @@ function holeNode() {
 /** One tile: the seed's own picture and its star. Pointing at it fills the record on the facing sheet and the
     label on its own line. */
 function tileNode(row, slot) {
-  const tile = el('div', 'tile' + (row.sel ? ' sel' : ''));
+  // A SLOT FILTER IS A LIST, NOT A CHOICE, so its tick is not the chooser's `sel` border: the picker stays up
+  // while items go on and come off, and a class change rebuilds the whole page. See `markTick`.
+  const filtering = view.mode === 'filter';
+  const tile = el('div', 'tile' + (row.sel && !filtering ? ' sel' : ''));
+
+  if (filtering) {
+    (tickAt[row.id] || (tickAt[row.id] = [])).push(tile);
+    if (row.sel) tile.style.outline = '2px solid #3a3d42';
+  }
 
   // THE PICTURE IS THE BUTTON. A vial used to be an `<img>` inside a `<button>`, and the two of them are two
   // uGUI boxes at about 0.45ms each on every write to the document - see the rebuild cost at the top of this
@@ -1077,7 +1107,16 @@ function tileNode(row, slot) {
   if (row.icon !== false) pick.style.width = (TILE - 2) + 'px';
   // Not while the sheet is folding away: the tiles are still on screen and still take a click, and a seed
   // chosen after the player asked to leave is written to the pot exactly as if they had meant it.
-  pick.addEventListener('click', () => { if (!closing) s1.call('picker.pick', row.id); });
+  pick.addEventListener('click', () => {
+    if (closing) return;
+    const answer = s1.call('picker.pick', row.id);
+    // The chooser is gone by now - picking a seed closes the picker. A filter answers with the state the game
+    // ended in ("on" / "off"), which is what the tick is drawn from: the write can be refused, and a tick over
+    // a filter that did not take it is worse than no tick.
+    if (!filtering || (answer !== 'on' && answer !== 'off')) return;
+    row.sel = answer === 'on';
+    markTick(row.id, row.sel);
+  });
   // The TILE, not the seed: a favourite is on the page twice and only one of them is under the pointer.
   pick.addEventListener('mouseenter', () => showRecord(row, slot));
   // The slip goes when the pointer does - see leaveRecord.
@@ -1284,6 +1323,53 @@ function anyTile() {
   return tile;
 }
 
+/* ---- the filter list ------------------------------------------------------------------------------------- */
+
+/** Sections the player has folded shut, by category key. Kept in the page: a fold is a way of looking at the
+    list, not a setting, and it must not cost a bridge call. */
+const folded = new Set();
+
+/** A heading that can be folded. Same hand as every other section head, with the switch where the sort knob
+    sits on the others. */
+function foldHead(box, key, name, count) {
+  const shut = folded.has(key);
+  const head = el('div', 'section');
+  head.appendChild(el('div', 'section-name', name));
+  head.appendChild(el('div', 'section-fill'));
+
+  const knob = el('button', 'knob' + (shut ? '' : ' on'), shut ? 'Show' : 'Hide');
+  knob.addEventListener('click', () => {
+    if (shut) folded.delete(key); else folded.add(key);
+    render();
+  });
+  head.appendChild(knob);
+
+  head.appendChild(el('div', 'section-count', String(count)));
+  box.appendChild(head);
+}
+
+/** One section per category, in the order the mod sent them: the game's own categories first, then whatever a
+    mod filed under its own heading. */
+function renderFilterRows(box, rows) {
+  const keys = [];
+  for (const tab of view.tabs || []) if (keys.indexOf(tab.id) < 0) keys.push(tab.id);
+  for (const row of rows) if (keys.indexOf(row.tab || '') < 0) keys.push(row.tab || '');
+
+  const favs = rows.filter((r) => r.fav);
+  if (favs.length) {
+    sectionHead(box, 'Favourites', favs.length, false, false);
+    grid(box, favs, false);
+  }
+
+  for (const key of keys) {
+    const group = rows.filter((row) => (row.tab || '') === key);
+    if (!group.length) continue;
+
+    foldHead(box, key, tabLabel(key), group.length);
+    if (!folded.has(key)) grid(box, group, false);
+  }
+}
+
 function renderRows(rows) {
   const box = $('rows');
   box.replaceChildren();
@@ -1293,6 +1379,7 @@ function renderRows(rows) {
   slots = 0;
   tipAt = [];
   slipAt = 0;
+  tickAt = {};
 
   pendingLead = view.none ? anyTile() : null;
 
@@ -1302,6 +1389,11 @@ function renderRows(rows) {
     box.appendChild(el('div', 'empty', query ? 'Nothing matches "' + query + '".' : 'Nothing to pick here.'));
     return;
   }
+
+  // A SLOT FILTER IS A DIFFERENT LIST, so it gets different headings: the game's own categories, in the game's
+  // own order, each one foldable. The vanilla/mod split below is right for a seed field, where "Vanilla" is
+  // five seeds; over three hundred items it is a heading that groups nothing.
+  if (view.mode === 'filter') { renderFilterRows(box, rows); return; }
 
   // Favourites first, from both halves - a vanilla seed can be starred too - and they stay in their own section
   // as well, which is what the game's product page does with a starred product.

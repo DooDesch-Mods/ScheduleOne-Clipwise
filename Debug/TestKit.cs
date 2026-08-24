@@ -1,4 +1,4 @@
-﻿#if DEBUG
+#if DEBUG
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -26,6 +26,7 @@ namespace Clipwise.Debugging
     ///   cwauto        what the classifier alone makes of the current seed list
     ///   cwreload      re-read the override files and the user preferences
     ///   cwopen        open the picker on the seed list without a clipboard
+    ///   cwfilter      open the picker on the slot-filter item list, the way the filter window's Add does
     ///   cwboard       open the real clipboard on the nearest pot, and close it again
     ///   cwshut        leave the picker the way Escape does - the fold, then the surface
     ///   cwicons       announce late icons by id, the way the icon pass does when it finishes
@@ -65,7 +66,7 @@ namespace Clipwise.Debugging
              && cmd != "cwnamecheck" && cmd != "cwauto" && cmd != "cwreload" && cmd != "cwopen"
              && cmd != "cwtab" && cmd != "cwsearch" && cmd != "cwvanilla" && cmd != "cwrect"
              && cmd != "cwboard" && cmd != "cwpng" && cmd != "cwfield" && cmd != "cwphone"
-             && cmd != "cwshut" && cmd != "cwicons")
+             && cmd != "cwshut" && cmd != "cwicons" && cmd != "cwfilter")
                 return false;
 
             // Both SubmitCommand overloads can fire for one submission (the string body calls the list body),
@@ -87,6 +88,7 @@ namespace Clipwise.Debugging
                     case "cwauto": Auto(); break;
                     case "cwreload": Reload(); break;
                     case "cwopen": Open(); break;
+                    case "cwfilter": Filter(); break;
                     case "cwfield": Field(); break;
                     case "cwvanilla": Vanilla(); break;
                     case "cwrect": Rects(); break;
@@ -347,6 +349,38 @@ namespace Clipwise.Debugging
             View view = ViewBuilder.Build("Seeds (cwopen)", seeds, null, false, "None");
             bool ok = SurfacePicker.TryOpen(canvasRoot, view, item =>
                 Say("Clipwise: cwopen picked " + (item != null ? item.ID : "(none)")));
+            if (!ok) Complain("Clipwise: the picker refused to open - is Sideload installed? See the log.");
+        }
+
+        /// <summary>
+        /// Open the picker on the SLOT-FILTER list - every item the game lets a filter name, grouped by the
+        /// game's own categories - without a shelf, a filter window or a mouse.
+        ///
+        /// The Add button that opens this for a player cannot be pressed from here, so this is the only way the
+        /// page it opens can be photographed at all.
+        /// </summary>
+        private static void Filter()
+        {
+            var options = Patches.FilterAddPatch.FilterOptions();
+            if (options.Count == 0) { Complain("Clipwise: no filterable items in the registry - load a save first."); return; }
+
+            Transform canvasRoot = TopCanvas();
+            if (canvasRoot == null) { Complain("Clipwise: no overlay canvas found to draw on."); return; }
+
+            View view = ViewBuilder.BuildFilter("Filter", options);
+            Say("Clipwise: " + options.Count + " filterable item(s) in " + view.Categories.Count + " category/categories.");
+
+            // The TOGGLE contract, not the chooser's - the same one the Add button uses, so what this opens
+            // behaves like the real thing: the picker stays up and tiles tick. There is no slot here, so the
+            // answer is simply what was asked for.
+            var ticked = new HashSet<string>(StringComparer.Ordinal);
+            bool ok = SurfacePicker.TryOpen(canvasRoot, view, (item, want) =>
+            {
+                string id = item != null ? item.ID : "(none)";
+                if (want) ticked.Add(id); else ticked.Remove(id);
+                Say("Clipwise: cwfilter " + (want ? "ticked " : "unticked ") + id + " (" + ticked.Count + " on the list)");
+                return want;
+            });
             if (!ok) Complain("Clipwise: the picker refused to open - is Sideload installed? See the log.");
         }
 

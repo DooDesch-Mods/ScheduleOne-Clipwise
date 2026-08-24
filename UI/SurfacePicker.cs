@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using Clipwise.Index;
@@ -55,6 +55,11 @@ namespace Clipwise.UI
         private static GameObject _host;
         private static View _view;
         private static Action<ItemDefinition> _onPick;
+
+        /// <summary>Set instead of <see cref="_onPick"/> when the picker builds a list rather than choosing one
+        /// thing. Its presence IS the mode: a tile ticks, the picker stays up, and the answer is the state the
+        /// item ended in.</summary>
+        private static Func<ItemDefinition, bool, bool> _onToggle;
 
         /// <summary>The icon pass that outlives the opening frame - see <see cref="Rest"/>. Held so closing the
         /// picker can stop it.</summary>
@@ -115,8 +120,27 @@ namespace Clipwise.UI
         /// grid run - never leave the clipboard half-functional because an experiment did not come up.
         /// </summary>
         internal static bool TryOpen(Transform canvasRoot, View view, Action<ItemDefinition> onPick)
+            => TryOpen(canvasRoot, view, onPick, null);
+
+        /// <summary>
+        /// Show the picker as a LIST BUILDER rather than a chooser: a tile is ticked and untied, the picker stays
+        /// up, and the caller answers with the state the item ended in.
+        ///
+        /// This is the shape a slot filter needs. Vanilla's own grid already works this way - hold shift and it
+        /// stays open (ScheduleOne.UI.Items/FilterConfigPanel.cs:423-431) - because a whitelist is almost never
+        /// one item. A picker that closed on the first tile would make a five-item filter five trips through the
+        /// Add button.
+        ///
+        /// The callback RETURNS the state rather than being told it. The filter is the game's, the write can be
+        /// refused, and a tick that says "on" over a filter that did not take it is worse than no tick at all.
+        /// </summary>
+        internal static bool TryOpen(Transform canvasRoot, View view, Func<ItemDefinition, bool, bool> onToggle)
+            => TryOpen(canvasRoot, view, null, onToggle);
+
+        private static bool TryOpen(Transform canvasRoot, View view, Action<ItemDefinition> onPick,
+                                    Func<ItemDefinition, bool, bool> onToggle)
         {
-            if (canvasRoot == null || view == null || onPick == null) return false;
+            if (canvasRoot == null || view == null || (onPick == null && onToggle == null)) return false;
             if (view.Rows.Count == 0) return false;
             if (!Surfaces.Available) return false;
 
@@ -126,6 +150,7 @@ namespace Clipwise.UI
 
                 _view = view;
                 _onPick = onPick;
+                _onToggle = onToggle;
 
                 // AddComponent rather than the (string, params Type[]) constructor: under IL2CPP that overload
                 // wants an Il2CppReferenceArray<Il2CppSystem.Type> and a managed Type will not convert.
@@ -520,6 +545,7 @@ namespace Clipwise.UI
             _host = null;
             _view = null;
             _onPick = null;
+            _onToggle = null;
         }
 
         /// <summary>
@@ -528,7 +554,9 @@ namespace Clipwise.UI
         /// </summary>
         private static string Pick(string itemId)
         {
-            if (_view == null || _onPick == null) return "error";
+            if (_view == null) return "error";
+            if (_onToggle != null) return Toggle(itemId);
+            if (_onPick == null) return "error";
 
             // What arrived, before anything is decided about it. The picker writes back through a callback the
             // caller owns, so from the outside a pick that chose nothing and a pick that never happened look the
@@ -553,6 +581,36 @@ namespace Clipwise.UI
                 Close();
                 handler(item);
                 return "ok";
+            }
+
+            return "error";
+        }
+
+        /// <summary>
+        /// Tick or untick one row without closing the picker, and answer the state it ended in.
+        ///
+        /// The row's own <c>Selected</c> is written from the ANSWER, never from what was asked for: the caller
+        /// owns the filter and may decline. Keeping the two in step is what makes a second click on the same tile
+        /// take the item off again rather than add it twice.
+        /// </summary>
+        private static string Toggle(string itemId)
+        {
+            Core.LogDebug("[Clipwise] toggle: '" + (itemId ?? "(null)") + "'");
+
+            foreach (Row row in _view.Rows)
+            {
+                if (!string.Equals(row.ItemId, itemId ?? string.Empty, StringComparison.Ordinal)) continue;
+
+                bool now;
+                try { now = _onToggle(row.Item, !row.Selected); }
+                catch (Exception e)
+                {
+                    Core.Log.Warning("[Clipwise] the filter refused the item: " + e.Message);
+                    return "error";
+                }
+
+                row.Selected = now;
+                return now ? "on" : "off";
             }
 
             return "error";
@@ -621,7 +679,11 @@ namespace Clipwise.UI
             sb.Append("{\"title\":").Append(Quote(view.Title))
               // What the field belongs to - "Pot 3" - so the resting page can say which pot it is about rather
               // than repeating the word the player is already looking at a page of.
-              .Append(",\"owner\":").Append(Quote(view.Owner));
+              .Append(",\"owner\":").Append(Quote(view.Owner))
+              // "" for a field on the clipboard, "filter" for a slot filter's item list. The page draws one
+              // section per game category in that mode - "Vanilla" over three hundred items is a heading that
+              // groups nothing - and every heading there can be folded shut.
+              .Append(",\"mode\":").Append(Quote(view.Mode));
 
             // THE TWO CARD SIZES, MEASURED IN C# AND SENT. The page cannot ask how big it is: a surface answers
             // layout coordinates and nothing about the viewport, so a script that wants two cards side by side

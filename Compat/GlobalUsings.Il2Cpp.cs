@@ -19,6 +19,7 @@ global using Il2CppScheduleOne.Growing;                 // SeedDefinition, Plant
 global using Il2CppScheduleOne.Product;                 // ProductDefinition, ProductManager
 global using Il2CppScheduleOne.Management;              // ItemField, ManagementUtilities, ManagementInterface
 global using Il2CppScheduleOne.UI.Management;           // ItemFieldUI, ItemSelector, ClipboardScreen
+global using Il2CppScheduleOne.UI.Items;                // FilterConfigPanel - the slot-filter window
 global using Il2CppScheduleOne.Tools;                   // ManagementClipboard
 global using Il2CppScheduleOne.DevUtilities;            // Singleton<T>, NetworkSingleton<T>, PlayerSingleton<T>
 global using Il2CppScheduleOne.Effects;                 // Effect
