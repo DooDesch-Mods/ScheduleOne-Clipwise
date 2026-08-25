@@ -318,13 +318,21 @@ body {
   padding: 4px 2px 6px 2px;
 }
 
+/* A div on the seed picker and a BUTTON on a filter list, where pressing the class name is what folds it -
+   see foldHead. The two lines at the end are what a button needs and a div does not: without them the element
+   draws the engine's own control background, and the text hangs from the top of a box that is only as wide as
+   the word anyway, so centring it is a no-op on the div. */
 .section-name {
   flex: none;
   font-family: game-hand;
   font-size: 16px;
   color: #3d4f78;
   white-space: nowrap;
+  background: transparent;
+  align-items: center;
 }
+
+.section-name:hover { color: #55648c; }
 
 .section-fill {
   flex: 1;
@@ -561,6 +569,44 @@ body {
 }
 
 .star.on { color: #e0a72c; }
+
+/*
+  THE TICK BOX, IN THE CORNER THE STAR HAS ON A SEED.
+
+  A slot filter is a LIST BEING BUILT, not one choice, so the one thing every tile has to carry is whether this
+  item is on the list. There are no favourites in that mode and no star, so the corner is free.
+
+  TWO BOXES, BOTH ALWAYS DRAWN, AND THAT IS THE WHOLE POINT. The frame never changes; the mark inside it is
+  taken away with `transform: scale(0)` and brought back with `scale(1)`. A transform is the one write this
+  engine answers by repainting the SINGLE box that was written (Sideload/Css/PaintOnlyProperties.cs) - so a
+  click costs no render at all. Every other way of drawing a tick costs the whole page: `display` and any
+  border WIDTH are read by the flex pass, and `color` and `opacity` are inherited and cascade into children,
+  which is why neither is on the paint-only list. On 138 items that is the difference between nothing and a
+  quarter-second freeze per tick.
+*/
+.tick {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 15px;
+  height: 15px;
+  border: 1.6px solid #3a3d42;
+  border-radius: 3px;
+  /* Paler than the tile it stands on, so an EMPTY box still reads as a control rather than as a hole in the
+     drawing. The paper is lit and the ink is not - a hairline alone is gone by nightfall. */
+  background: #f2f3f5;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The mark. White in the file and tinted here ONCE - `color` is inherited, so it is on the rebuild path and
+   must never be the thing that changes. Its size comes from CSS alone: the layout runs without Unity and
+   cannot read a PNG, so an image with no width is a box of nothing. */
+.tick-mark {
+  width: 11px;
+  height: 11px;
+  color: #2b3c66;
+}
 
 /* The opposite corner from the star, and only drawn while the Hidden chip is on. */
 .hide {

@@ -61,6 +61,20 @@ namespace Clipwise.UI
         /// item ended in.</summary>
         private static Func<ItemDefinition, bool, bool> _onToggle;
 
+        /// <summary>
+        /// ONE SHEET, NOT THE PAD - and it is the view's own mode that says so, read once in <see cref="TryOpen"/>
+        /// so that <see cref="Fit"/> and <see cref="ViewJson"/> cannot answer differently.
+        ///
+        /// A field picker chooses one seed, and the second sheet carries the record of whatever the pointer is
+        /// on. A SLOT FILTER is a list built by ticking, over three hundred items on a modded save, and there the
+        /// record is the most expensive thing on the page: every write to the document rebuilds the whole page on
+        /// this side, so every hover paid for two of them.
+        ///
+        /// So a filter opens on vanilla's card and nothing else - the same sheet, the same size, no fold to play
+        /// and no second page to lay out.
+        /// </summary>
+        private static bool _single;
+
         /// <summary>The icon pass that outlives the opening frame - see <see cref="Rest"/>. Held so closing the
         /// picker can stop it.</summary>
         private static object _rest;
@@ -151,6 +165,7 @@ namespace Clipwise.UI
                 _view = view;
                 _onPick = onPick;
                 _onToggle = onToggle;
+                _single = string.Equals(view.Mode, "filter", StringComparison.Ordinal);
 
                 // AddComponent rather than the (string, params Type[]) constructor: under IL2CPP that overload
                 // wants an Il2CppReferenceArray<Il2CppSystem.Type> and a managed Type will not convert.
@@ -232,7 +247,16 @@ namespace Clipwise.UI
             rect.anchorMax = new Vector2(0.5f, 0.5f);
             rect.pivot = new Vector2(0.5f, 0.5f);
             rect.anchoredPosition = Vector2.zero;
-            rect.sizeDelta = new Vector2(FallbackSpread, FallbackHeight);
+
+            // WRITTEN BEFORE THE MEASURING, not after it. These statics outlive one open and every failure below
+            // returns early - without this, a picker that could not find the card would send the page the sizes
+            // of the last one that could.
+            _pageW = FallbackWidth;
+            _pageH = FallbackHeight;
+            _pageRW = _single ? 0f : FallbackRight;
+            _spreadW = _single ? FallbackWidth : FallbackSpread;
+
+            rect.sizeDelta = new Vector2(_spreadW, FallbackHeight);
 
             try
             {
@@ -242,8 +266,8 @@ namespace Clipwise.UI
 
                 if (card == null || card.parent == null)
                 {
-                    Core.Log.Warning("[Clipwise] no ItemSelector card to sit in - using " + FallbackSpread + "x" + FallbackHeight + ".");
-                    return Mathf.Min(FallbackSpread, FallbackHeight);
+                    Core.Log.Warning("[Clipwise] no ItemSelector card to sit in - using " + _spreadW + "x" + FallbackHeight + ".");
+                    return Mathf.Min(_spreadW, FallbackHeight);
                 }
 
                 // GetComponent, NOT `as`. Under IL2CPP a cast on the interop object handed back by .parent
@@ -256,7 +280,7 @@ namespace Clipwise.UI
                 if (holder == null)
                 {
                     Core.Log.Warning("[Clipwise] the ItemSelector has no RectTransform parent - using the fallback size.");
-                    return Mathf.Min(FallbackSpread, FallbackHeight);
+                    return Mathf.Min(_spreadW, FallbackHeight);
                 }
 
                 // NOT a check on the card: the game activates the selector screen in the very call this patch
@@ -266,7 +290,7 @@ namespace Clipwise.UI
                 if (!holder.gameObject.activeInHierarchy)
                 {
                     Core.Log.Warning("[Clipwise] the clipboard is not on screen - using the fallback size.");
-                    return Mathf.Min(FallbackSpread, FallbackHeight);
+                    return Mathf.Min(_spreadW, FallbackHeight);
                 }
 
                 // THE HOLDER FOR PLACE, THE PAPER FOR SIZE, and every part of that was learned from a
@@ -297,15 +321,19 @@ namespace Clipwise.UI
                 // is the same sheet again - see RightShare - hanging off the perforated edge and past the board.
                 float pageW = size.x;
                 float pageH = size.y;
-                float pageRW = Mathf.Round(pageW * RightShare);
+
+                // NO SECOND SHEET FOR A SLOT FILTER - see _single. A width of zero is what the page itself tests,
+                // so one number decides the geometry and the page never has to re-derive it from the mode.
+                float pageRW = _single ? 0f : Mathf.Round(pageW * RightShare);
 
                 // The ceiling, enforced rather than assumed: "at most as high and as wide as the left". Equal is
                 // the ceiling, not a violation of it, and this is what makes that a fact instead of an intention.
                 pageRW = Mathf.Min(pageRW, pageW);
 
-                // Exactly twice the card with the constants above (Gutter 0, RightShare 1). Written as the sum
-                // anyway, because the sum is the thing that stays true if either constant is ever changed.
-                float wanted = pageW + Gutter + pageRW;
+                // Exactly twice the card with the constants above (Gutter 0, RightShare 1), and exactly ONE card
+                // with no second sheet - the gutter goes with the sheet it separated. Written as the sum anyway,
+                // because the sum is the thing that stays true if either constant is ever changed.
+                float wanted = _single ? pageW : pageW + Gutter + pageRW;
 
                 // NOT CLAMPED TO THE CANVAS, and that took two measurements to accept.
                 //
@@ -355,8 +383,10 @@ namespace Clipwise.UI
                 // as high and as wide as the left", and a rule nobody can read off a screenshot is a rule that
                 // gets broken by the next change to the arithmetic.
                 Core.Log.Msg("[Clipwise] left page " + pageW.ToString("0") + "x" + pageH.ToString("0")
-                             + ", right page " + pageRW.ToString("0") + "x" + pageH.ToString("0")
-                             + " (no wider: " + (pageRW <= pageW) + ", no taller: same height by construction)"
+                             + (_single
+                                 ? ", no right page (one sheet: slot filter)"
+                                 : ", right page " + pageRW.ToString("0") + "x" + pageH.ToString("0")
+                                   + " (no wider: " + (pageRW <= pageW) + ", no taller: same height by construction)")
                              + ", surface " + wanted.ToString("0") + "x" + pageH.ToString("0")
                              + " from '" + paper.name + "', centred in '"
                              + holder.name + "' (" + holder.rect.width.ToString("0") + "x"
@@ -546,6 +576,7 @@ namespace Clipwise.UI
             _view = null;
             _onPick = null;
             _onToggle = null;
+            _single = false;
         }
 
         /// <summary>
