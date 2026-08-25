@@ -18,6 +18,12 @@
 
   ORDER IS PAINT ORDER. There is no z-index in this engine, so the fold, the perforation and the stack are
   written FIRST inside their page and everything else paints over them.
+
+  ONE SHEET FOR A SLOT FILTER. A filter is a list built by ticking, not one choice, and the second sheet is a
+  record of whatever the pointer is on - which is a page that has to be laid out again on every hover. So in
+  that mode `#pageR`, `#foldL` and `#perf` are REMOVED from the document at boot (see `soloShell` in app.js),
+  not hidden: a removed node is not a uGUI box and never costs a layout pass again. What is left is exactly
+  vanilla's own card, at vanilla's own size, and nothing hangs off its right edge to justify a perforation.
 -->
 <div class="pad" id="spread">
 
@@ -25,8 +31,8 @@
 
     <!-- The fold, drawn inside the sheet rather than between the sheets: a 20px gradient into the crease, with
          the perforation punched through it. -->
-    <div class="fold-l"></div>
-    <div class="perf">
+    <div class="fold-l" id="foldL"></div>
+    <div class="perf" id="perf">
       <i class="hole"></i><i class="hole"></i><i class="hole"></i><i class="hole"></i>
       <i class="hole"></i><i class="hole"></i><i class="hole"></i><i class="hole"></i>
       <i class="hole"></i><i class="hole"></i><i class="hole"></i><i class="hole"></i>

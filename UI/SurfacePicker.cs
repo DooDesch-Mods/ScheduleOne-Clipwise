@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using Clipwise.Index;
@@ -55,6 +55,25 @@ namespace Clipwise.UI
         private static GameObject _host;
         private static View _view;
         private static Action<ItemDefinition> _onPick;
+
+        /// <summary>Set instead of <see cref="_onPick"/> when the picker builds a list rather than choosing one
+        /// thing. Its presence IS the mode: a tile ticks, the picker stays up, and the answer is the state the
+        /// item ended in.</summary>
+        private static Func<ItemDefinition, bool, bool> _onToggle;
+
+        /// <summary>
+        /// ONE SHEET, NOT THE PAD - and it is the view's own mode that says so, read once in <see cref="TryOpen"/>
+        /// so that <see cref="Fit"/> and <see cref="ViewJson"/> cannot answer differently.
+        ///
+        /// A field picker chooses one seed, and the second sheet carries the record of whatever the pointer is
+        /// on. A SLOT FILTER is a list built by ticking, over three hundred items on a modded save, and there the
+        /// record is the most expensive thing on the page: every write to the document rebuilds the whole page on
+        /// this side, so every hover paid for two of them.
+        ///
+        /// So a filter opens on vanilla's card and nothing else - the same sheet, the same size, no fold to play
+        /// and no second page to lay out.
+        /// </summary>
+        private static bool _single;
 
         /// <summary>The icon pass that outlives the opening frame - see <see cref="Rest"/>. Held so closing the
         /// picker can stop it.</summary>
@@ -115,8 +134,27 @@ namespace Clipwise.UI
         /// grid run - never leave the clipboard half-functional because an experiment did not come up.
         /// </summary>
         internal static bool TryOpen(Transform canvasRoot, View view, Action<ItemDefinition> onPick)
+            => TryOpen(canvasRoot, view, onPick, null);
+
+        /// <summary>
+        /// Show the picker as a LIST BUILDER rather than a chooser: a tile is ticked and untied, the picker stays
+        /// up, and the caller answers with the state the item ended in.
+        ///
+        /// This is the shape a slot filter needs. Vanilla's own grid already works this way - hold shift and it
+        /// stays open (ScheduleOne.UI.Items/FilterConfigPanel.cs:423-431) - because a whitelist is almost never
+        /// one item. A picker that closed on the first tile would make a five-item filter five trips through the
+        /// Add button.
+        ///
+        /// The callback RETURNS the state rather than being told it. The filter is the game's, the write can be
+        /// refused, and a tick that says "on" over a filter that did not take it is worse than no tick at all.
+        /// </summary>
+        internal static bool TryOpen(Transform canvasRoot, View view, Func<ItemDefinition, bool, bool> onToggle)
+            => TryOpen(canvasRoot, view, null, onToggle);
+
+        private static bool TryOpen(Transform canvasRoot, View view, Action<ItemDefinition> onPick,
+                                    Func<ItemDefinition, bool, bool> onToggle)
         {
-            if (canvasRoot == null || view == null || onPick == null) return false;
+            if (canvasRoot == null || view == null || (onPick == null && onToggle == null)) return false;
             if (view.Rows.Count == 0) return false;
             if (!Surfaces.Available) return false;
 
@@ -126,6 +164,8 @@ namespace Clipwise.UI
 
                 _view = view;
                 _onPick = onPick;
+                _onToggle = onToggle;
+                _single = string.Equals(view.Mode, "filter", StringComparison.Ordinal);
 
                 // AddComponent rather than the (string, params Type[]) constructor: under IL2CPP that overload
                 // wants an Il2CppReferenceArray<Il2CppSystem.Type> and a managed Type will not convert.
@@ -207,7 +247,16 @@ namespace Clipwise.UI
             rect.anchorMax = new Vector2(0.5f, 0.5f);
             rect.pivot = new Vector2(0.5f, 0.5f);
             rect.anchoredPosition = Vector2.zero;
-            rect.sizeDelta = new Vector2(FallbackSpread, FallbackHeight);
+
+            // WRITTEN BEFORE THE MEASURING, not after it. These statics outlive one open and every failure below
+            // returns early - without this, a picker that could not find the card would send the page the sizes
+            // of the last one that could.
+            _pageW = FallbackWidth;
+            _pageH = FallbackHeight;
+            _pageRW = _single ? 0f : FallbackRight;
+            _spreadW = _single ? FallbackWidth : FallbackSpread;
+
+            rect.sizeDelta = new Vector2(_spreadW, FallbackHeight);
 
             try
             {
@@ -217,8 +266,8 @@ namespace Clipwise.UI
 
                 if (card == null || card.parent == null)
                 {
-                    Core.Log.Warning("[Clipwise] no ItemSelector card to sit in - using " + FallbackSpread + "x" + FallbackHeight + ".");
-                    return Mathf.Min(FallbackSpread, FallbackHeight);
+                    Core.Log.Warning("[Clipwise] no ItemSelector card to sit in - using " + _spreadW + "x" + FallbackHeight + ".");
+                    return Mathf.Min(_spreadW, FallbackHeight);
                 }
 
                 // GetComponent, NOT `as`. Under IL2CPP a cast on the interop object handed back by .parent
@@ -231,7 +280,7 @@ namespace Clipwise.UI
                 if (holder == null)
                 {
                     Core.Log.Warning("[Clipwise] the ItemSelector has no RectTransform parent - using the fallback size.");
-                    return Mathf.Min(FallbackSpread, FallbackHeight);
+                    return Mathf.Min(_spreadW, FallbackHeight);
                 }
 
                 // NOT a check on the card: the game activates the selector screen in the very call this patch
@@ -241,7 +290,7 @@ namespace Clipwise.UI
                 if (!holder.gameObject.activeInHierarchy)
                 {
                     Core.Log.Warning("[Clipwise] the clipboard is not on screen - using the fallback size.");
-                    return Mathf.Min(FallbackSpread, FallbackHeight);
+                    return Mathf.Min(_spreadW, FallbackHeight);
                 }
 
                 // THE HOLDER FOR PLACE, THE PAPER FOR SIZE, and every part of that was learned from a
@@ -272,15 +321,19 @@ namespace Clipwise.UI
                 // is the same sheet again - see RightShare - hanging off the perforated edge and past the board.
                 float pageW = size.x;
                 float pageH = size.y;
-                float pageRW = Mathf.Round(pageW * RightShare);
+
+                // NO SECOND SHEET FOR A SLOT FILTER - see _single. A width of zero is what the page itself tests,
+                // so one number decides the geometry and the page never has to re-derive it from the mode.
+                float pageRW = _single ? 0f : Mathf.Round(pageW * RightShare);
 
                 // The ceiling, enforced rather than assumed: "at most as high and as wide as the left". Equal is
                 // the ceiling, not a violation of it, and this is what makes that a fact instead of an intention.
                 pageRW = Mathf.Min(pageRW, pageW);
 
-                // Exactly twice the card with the constants above (Gutter 0, RightShare 1). Written as the sum
-                // anyway, because the sum is the thing that stays true if either constant is ever changed.
-                float wanted = pageW + Gutter + pageRW;
+                // Exactly twice the card with the constants above (Gutter 0, RightShare 1), and exactly ONE card
+                // with no second sheet - the gutter goes with the sheet it separated. Written as the sum anyway,
+                // because the sum is the thing that stays true if either constant is ever changed.
+                float wanted = _single ? pageW : pageW + Gutter + pageRW;
 
                 // NOT CLAMPED TO THE CANVAS, and that took two measurements to accept.
                 //
@@ -330,8 +383,10 @@ namespace Clipwise.UI
                 // as high and as wide as the left", and a rule nobody can read off a screenshot is a rule that
                 // gets broken by the next change to the arithmetic.
                 Core.Log.Msg("[Clipwise] left page " + pageW.ToString("0") + "x" + pageH.ToString("0")
-                             + ", right page " + pageRW.ToString("0") + "x" + pageH.ToString("0")
-                             + " (no wider: " + (pageRW <= pageW) + ", no taller: same height by construction)"
+                             + (_single
+                                 ? ", no right page (one sheet: slot filter)"
+                                 : ", right page " + pageRW.ToString("0") + "x" + pageH.ToString("0")
+                                   + " (no wider: " + (pageRW <= pageW) + ", no taller: same height by construction)")
                              + ", surface " + wanted.ToString("0") + "x" + pageH.ToString("0")
                              + " from '" + paper.name + "', centred in '"
                              + holder.name + "' (" + holder.rect.width.ToString("0") + "x"
@@ -520,6 +575,8 @@ namespace Clipwise.UI
             _host = null;
             _view = null;
             _onPick = null;
+            _onToggle = null;
+            _single = false;
         }
 
         /// <summary>
@@ -528,7 +585,9 @@ namespace Clipwise.UI
         /// </summary>
         private static string Pick(string itemId)
         {
-            if (_view == null || _onPick == null) return "error";
+            if (_view == null) return "error";
+            if (_onToggle != null) return Toggle(itemId);
+            if (_onPick == null) return "error";
 
             // What arrived, before anything is decided about it. The picker writes back through a callback the
             // caller owns, so from the outside a pick that chose nothing and a pick that never happened look the
@@ -553,6 +612,36 @@ namespace Clipwise.UI
                 Close();
                 handler(item);
                 return "ok";
+            }
+
+            return "error";
+        }
+
+        /// <summary>
+        /// Tick or untick one row without closing the picker, and answer the state it ended in.
+        ///
+        /// The row's own <c>Selected</c> is written from the ANSWER, never from what was asked for: the caller
+        /// owns the filter and may decline. Keeping the two in step is what makes a second click on the same tile
+        /// take the item off again rather than add it twice.
+        /// </summary>
+        private static string Toggle(string itemId)
+        {
+            Core.LogDebug("[Clipwise] toggle: '" + (itemId ?? "(null)") + "'");
+
+            foreach (Row row in _view.Rows)
+            {
+                if (!string.Equals(row.ItemId, itemId ?? string.Empty, StringComparison.Ordinal)) continue;
+
+                bool now;
+                try { now = _onToggle(row.Item, !row.Selected); }
+                catch (Exception e)
+                {
+                    Core.Log.Warning("[Clipwise] the filter refused the item: " + e.Message);
+                    return "error";
+                }
+
+                row.Selected = now;
+                return now ? "on" : "off";
             }
 
             return "error";
@@ -621,7 +710,11 @@ namespace Clipwise.UI
             sb.Append("{\"title\":").Append(Quote(view.Title))
               // What the field belongs to - "Pot 3" - so the resting page can say which pot it is about rather
               // than repeating the word the player is already looking at a page of.
-              .Append(",\"owner\":").Append(Quote(view.Owner));
+              .Append(",\"owner\":").Append(Quote(view.Owner))
+              // "" for a field on the clipboard, "filter" for a slot filter's item list. The page draws one
+              // section per game category in that mode - "Vanilla" over three hundred items is a heading that
+              // groups nothing - and every heading there can be folded shut.
+              .Append(",\"mode\":").Append(Quote(view.Mode));
 
             // THE TWO CARD SIZES, MEASURED IN C# AND SENT. The page cannot ask how big it is: a surface answers
             // layout coordinates and nothing about the viewport, so a script that wants two cards side by side

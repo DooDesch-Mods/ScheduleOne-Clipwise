@@ -36,6 +36,9 @@ namespace Clipwise.Index
         /// <summary>The thing the field belongs to - the station's own name, "Pot 3". Empty when the click could
         /// not be traced to exactly one station, which is the case whenever several are selected at once.</summary>
         public string Owner = "";
+        /// <summary>"" for the field picker, "filter" when the page is picking an item for a slot filter - the
+        /// page draws its own sections in that mode, one per category, instead of the vanilla/mod split.</summary>
+        public string Mode = "";
     }
 
     /// <summary>
@@ -61,8 +64,40 @@ namespace Clipwise.Index
         /// otherwise a single stray item would create a one-row category.</summary>
         private const int MinClusterSize = 2;
 
+        /// <summary>
+        /// The picker for a SLOT FILTER: every item the game lets a filter name, grouped the way the game's own
+        /// search grid groups it - one section per <c>EItemCategory</c>. A mod that filed its items with Clipwise
+        /// keeps its own section, which is what gives Breed to Seed a heading of its own holding only the strains
+        /// this save has met.
+        /// </summary>
+        public static View BuildFilter(string title, IList<ItemDefinition> options)
+        {
+            View view = Build(title, options, null, false, "None", ByItemCategory);
+            view.Mode = "filter";
+            return view;
+        }
+
+        /// <summary>
+        /// The game's own category for an item, as a Clipwise category. Registered on first sight, so a save only
+        /// ever shows the categories its items actually use, and all of them sort equal - the order between them
+        /// falls to the key, which is the enum name, which is the alphabetical order vanilla's own grid uses
+        /// (ScheduleOne.UI.Items/FilterConfigPanel.cs:538).
+        /// </summary>
+        private static string ByItemCategory(ItemDefinition def, ItemFacts facts)
+        {
+            string name;
+            try { name = def.Category.ToString(); }
+            catch { name = "Other"; }
+            if (string.IsNullOrWhiteSpace(name)) name = "Other";
+
+            string id = name.ToLowerInvariant();
+            EnsureAuto(id, name, SortVanilla);
+            return CategoryDef.MakeKey(AutoSource, id);
+        }
+
         public static View Build(string title, IList<ItemDefinition> options, ItemDefinition selected,
-                                 bool includeNone, string noneLabel)
+                                 bool includeNone, string noneLabel,
+                                 Func<ItemDefinition, ItemFacts, string> vanillaCategory = null)
         {
             var view = new View { Title = title ?? "" };
             var resolved = Catalog.Resolved();
@@ -100,7 +135,7 @@ namespace Clipwise.Index
             // Pass 2: assign a category to every row, inventing auto categories where nothing was declared.
             foreach (var (def, facts, entry) in pending)
             {
-                string categoryKey = ResolveCategory(entry, facts, prefixCounts);
+                string categoryKey = ResolveCategory(entry, facts, prefixCounts, def, vanillaCategory);
 
                 var row = new Row
                 {
@@ -181,7 +216,9 @@ namespace Clipwise.Index
             try { return def.ID; } catch { return null; }
         }
 
-        private static string ResolveCategory(ItemEntry entry, ItemFacts facts, Dictionary<string, int> prefixCounts)
+        private static string ResolveCategory(ItemEntry entry, ItemFacts facts, Dictionary<string, int> prefixCounts,
+                                              ItemDefinition def = null,
+                                              Func<ItemDefinition, ItemFacts, string> vanillaCategory = null)
         {
             if (entry?.CategoryKey != null)
             {
@@ -200,6 +237,13 @@ namespace Clipwise.Index
 
             if (!facts.IsModded)
             {
+                // One bucket for the seed picker, one section per game category for a slot filter - the caller
+                // decides, because "Vanilla" over 300 items is a heading that groups nothing.
+                if (vanillaCategory != null && def != null)
+                {
+                    string key = vanillaCategory(def, facts);
+                    if (!string.IsNullOrEmpty(key)) return key;
+                }
                 EnsureAuto(VanillaId, "Vanilla", SortVanilla);
                 return CategoryDef.MakeKey(AutoSource, VanillaId);
             }

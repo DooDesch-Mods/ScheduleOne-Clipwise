@@ -33,6 +33,17 @@ body {
   height: 100%;
   font-family: game-ui;
   font-size: 15px;
+  /*
+    NOT VANILLA'S NUMBER, AND ON PURPOSE - see #238. The game's ink is 60/60/60 and this is 35/38/43, but the
+    two cannot be compared as numbers: a Sideload surface renders a CSS colour at its LINEAR value (measured on
+    this page: #d7d9dc lands at 177, #3a3d42 at 13), while the game's own Image is unlit uGUI and lands at the
+    number it was given. Written as #3C3C3C this ink would render at 11, six times darker than the 61 vanilla
+    puts on the same paper.
+
+    So every colour on this page waits for the gamma step, and moves in ONE pass when it lands. What each one
+    becomes then is vanilla's own number; what it would have to be TODAY to look like vanilla is
+    srgb(linear(v)) - about #868686 for this ink and #CFCFCF for the tile outline.
+  */
   color: #23262b;
 }
 
@@ -54,8 +65,18 @@ body {
   overflow: hidden;
 }
 
-/* The right padding clears the fold and the perforation; the bottom clears the stack of sheets underneath. */
-.page.left { padding: 18px 30px 14px 20px; }
+/*
+  25 IN FROM EACH SIDE, WHICH IS VANILLA'S OWN INSET. The game's `Options` grid starts 25 from the left edge of
+  the card and its `Seperator` is 25 in from both - so the left padding IS 25 and everything on the sheet lines
+  up with the card it is drawn on.
+
+  The right is 15 and not 25 because `.list` takes the other 10 for the scroll bar (LIST_PAD in app.js), which
+  the game needs no room for - its grid does not scroll at all. The head, the search line and the chips give
+  the same 10 back as a margin, so every one of them ends where the grid does.
+
+  The fold and the perforation live in the bare paper vanilla leaves to the right of its last tile: the fold
+  starts at 400 and the last outline ends at 392.5. The bottom clears the stack of sheets underneath. */
+.page.left { padding: 18px 15px 14px 25px; }
 
 /* The left padding clears the other half of the crease. */
 .page.right { padding: 20px 22px 18px 32px; }
@@ -162,6 +183,9 @@ body {
   align-items: baseline;
   gap: 10px;
   height: 30px;
+  /* The scroll bar's column, given back so the head ends where the grid does - see `.page.left`. Without it the
+     title, which is centred in this row, sits 5px right of the middle of the card. */
+  margin-right: 10px;
 }
 
 .back {
@@ -222,7 +246,15 @@ body {
   align-items: center;
   gap: 8px;
   height: 28px;
-  margin: 6px 0 0 0;
+  /* WHERE VANILLA'S RULE IS. Its `Seperator` spans y79..91 with the stroke through the middle at y85; 18 of
+     page padding + 30 of head + 10 + 28 puts this border's underside at 86, so the stroke sits at 84.4..86.
+     The 10 on the right is the scroll bar's column given back, which makes the rule 370 wide, 25 in from each
+     side - vanilla's number. */
+  margin: 10px 10px 0 0;
+  /* THINNER THAN VANILLA'S, AND ITS COLOUR IS NOT VANILLA'S EITHER. The game draws a hand-drawn line sprite
+     (`handdrawn_line_horizontal`, 370x12 on the card, 60/60/60) whose stroke measures about 5px with tapered
+     ends; a border is a flat stroke and 5px of it reads as a printed bar. The colour waits for the gamma step
+     with every other colour on the page - see `body`. */
   border-bottom: 1.6px solid #3a3d42;
 }
 
@@ -259,7 +291,8 @@ body {
 .chips {
   flex: none;
   gap: 4px;
-  margin: 10px 0 10px 0;
+  /* The scroll bar's column on the right, so a chip row ends where the grid does - see `.page.left`. */
+  margin: 10px 10px 10px 0;
 }
 
 .chip-row {
@@ -318,13 +351,21 @@ body {
   padding: 4px 2px 6px 2px;
 }
 
+/* A div on the seed picker and a BUTTON on a filter list, where pressing the class name is what folds it -
+   see foldHead. The two lines at the end are what a button needs and a div does not: without them the element
+   draws the engine's own control background, and the text hangs from the top of a box that is only as wide as
+   the word anyway, so centring it is a no-op on the div. */
 .section-name {
   flex: none;
   font-family: game-hand;
   font-size: 16px;
   color: #3d4f78;
   white-space: nowrap;
+  background: transparent;
+  align-items: center;
 }
+
+.section-name:hover { color: #55648c; }
 
 .section-fill {
   flex: 1;
@@ -407,38 +448,65 @@ body {
 
 /* ---- the grid -------------------------------------------------------------------------------------------- */
 
-/* One line of five. There is no wrapping in this engine, so the script cuts the lines and this only has to
-   lay one out. */
+/*
+  ONE LINE OF FIVE, AT VANILLA'S PITCH. There is no wrapping in this engine, so the script cuts the lines and
+  this only has to lay one out.
+
+  THE NUMBERS ARE THE GAME'S GRID, NOT A CHOICE. Its `Options` GridLayoutGroup has a 74x74 cell with zero
+  spacing, and the outline drawn inside each cell is 69x69 - 2.5 of bare paper on every side. A tile here IS
+  that outline, so 69 of tile plus 5 of gap is one 74 cell, and the 2.5 to the left of the first cell is this
+  margin. Five of them run 27.5..392.5 on a 420 card, which is exactly where the game puts them.
+
+  NO INDENT UNDER A TIER HEADING, and that is the price of the 74 cell. Five cells plus vanilla's own 25 inset
+  fill the card to within 2.5px; there is nothing left to set a group in by, so a tier heading keeps its 14 and
+  its tiles stand where every other tile on the sheet does.
+*/
 .line {
   flex-direction: row;
-  gap: 7px;
-  margin-bottom: 7px;
+  gap: 5px;
+  margin-left: 2.5px;
+  margin-bottom: 5px;
 }
 
-/* Under a tier heading, and lined up with it. The heading is indented 14 and the tiles ARE the group, so they
-   are indented with it - a group whose tiles start left of its own name reads as a heading over nothing. */
-.line.in { margin-left: 14px; }
-
 /*
-  THE SIZE IS NOT HERE. A tile is square, and five of them plus four gaps fill the width of the sheet - which
-  is vanilla's card, a number only the mod can measure. So it is worked out per render in `tileSize()` and
-  written onto the box. Left at a fixed 57 the row came to 313 in a 370 sheet and hung to the left with sixty
-  pixels of bare paper beside it.
+  THE SIZE IS NOT HERE - it is written onto every tile from script, because the columns are counted off
+  whatever sheet the mod measured. See TILE in app.js; on vanilla's card it is always 69.
+
+  THIS BOX IS VANILLA'S `Outline`. The game's option button is a 74 cell holding an `Outline_RoundedEdges`
+  sprite inset 5 (69x69) in 160/160/160, and a 60x60 icon centred in the cell. The stroke measures 3.4px: the
+  sprite is 9-sliced at 102px of 512 with `pixelsPerUnitMultiplier` 30, and 102/30 is 3.4 - confirmed against
+  the game's own screenshot, where that outline is 2px wide in a shot scaled 0.626. Its sliced corner works out
+  at 255/30 = 8.5px, which is the 9px radius this page already had.
+
+  THE COLOUR IS STILL OURS. Vanilla's outline is 160/160/160 and this is 198/201/205, and that is not a drift
+  to fix today: a surface renders a CSS colour at its LINEAR value, so #c6c9cd lands at about 148 and vanilla's
+  own #A0A0A0 would land at 90. The number that is wrong on paper is the one that matches on screen - see
+  `body`, and #238's own note that colours cannot be compared until the gamma step is settled.
+
+  THE FILL IS OURS TOO. The game's tile has a background sprite drawn at alpha 0 - its outline stands on bare
+  paper. #e4e6e8 is the design's (SPEC part 2) and is kept deliberately.
 */
 .tile {
   flex: none;
-  border: 1px solid #c6c9cd;
+  border: 3.4px solid #c6c9cd;
   border-radius: 9px;
   background: #e4e6e8;
 }
 
-/* Fills the last line so its tiles keep the place of every other line's. */
+/* Fills the last line so its tiles keep the place of every other line's. Only the colour goes: the box is
+   measured border-box, so a different border WIDTH here would change what fits inside it. */
 .tile.hole {
-  border: 1px solid transparent;
+  border-color: transparent;
   background: transparent;
 }
 
-.tile.sel { border: 2px solid #3a3d42; }
+/* THE SAME OUTLINE, RECOLOURED, which is all the game does: `ItemSelector.cs:126` writes 90/90/90 into the
+   Outline of the selected option and changes nothing else - same sprite, same 3.4px, one colour. So this is a
+   colour and not a second border width, which also makes it the one write this engine answers by repainting a
+   single box.
+
+   THE HUE IS OURS UNTIL THE GAMMA STEP - see `body`. Vanilla's 90/90/90 would render at 24 here. */
+.tile.sel { border-color: #3a3d42; }
 
 /* The game draws the None option as an empty frame with a cross in it, and so does this.
 
@@ -446,26 +514,30 @@ body {
    every CSS line style and draws all of them as one solid stroke - it has no dash pattern at all
    (Sideload/Css/StyleApplier.cs:1257-1260). Saying `solid` is saying what is drawn.
 
-   DARKER THAN THE DESIGN'S #a9adb4, and every unfilled outline on this page is. The paper is LIT and the ink
-   is not: at noon the sheet renders around 193 and at 4am around 119, so a light grey line that reads on a
-   mock disappears at night while a filled box keeps its shape. Only the fill can afford to be pale. */
+   THE SAME OUTLINE AS EVERY OTHER TILE, because in the game it is literally the same prefab: the None option
+   is an option button with its icon switched off and a 25x25 cross switched on, carrying the same outline as
+   every other option. So it declares no border of its own - only the fill goes.
+
+   A PALE OUTLINE ON LIT PAPER WAS THE FEAR, AND VANILLA'S ANSWER IS THICKNESS RATHER THAN INK. The paper is
+   lit and the ink is not - at noon the sheet renders around 193 and at 4am around 119 - and the game's own
+   160/160/160 outline still reads at 4am, measured at 154 against paper at 120 on the screenshot in #238. It
+   is 3.4px wide, which is where it gets that from; this one used to be 1.6. */
 .tile.any {
-  border: 1.6px solid #9aa0a7;
   background: transparent;
 }
 
 /* The whole tile is the target. The star sits on top of it rather than inside, so starring and choosing
    stay two separate clicks.
 
-   THE SHOT IS THE PICTURE ITSELF - an `<img>` for a seed, a `<button>` for one with no picture. The two
-   pixels of padding are what inset the vial inside the tile, and they are the same two the picture used to
-   sit at as a separate child.
+   THE SHOT IS THE PICTURE ITSELF - an `<img>` for a seed, a `<button>` for one with no picture. The padding
+   is what insets the vial inside the tile: the tile is 69 with a 3.4 stroke on each side, so this box is 62.2
+   and 1.1 of padding leaves the picture at exactly the 60x60 the game draws its own icon at.
 
    `align-items` and `justify-content` are for the initials: the picture is placed by the padding, the words
    are placed by these. `align-items` alone only settles the cross axis; the column's own axis is
    `justify-content`, and without it the letters hang from the top whatever the padding says. */
 .shot {
-  padding: 2px;
+  padding: 1.1px;
   background: transparent;
   align-items: center;
   justify-content: center;
@@ -473,6 +545,8 @@ body {
   border-radius: 9px;
 }
 
+/* Vanilla darkens instead - its Button tints the tile black at alpha 0.157 over the whole 74 cell. This one
+   lightens, which is the design's, and it is not on #238's list. */
 .shot:hover { background: #eef0f1; }
 
 /* The tile carries a picture and nothing else, the way the game's own does. The words are on the facing page.
@@ -489,7 +563,11 @@ body {
 
 /* The cross is the letter X, and it is the whole of the tile: the word under it said "ANY" a second time
    next to a record on the facing sheet that says it in full. Anything outside Latin-1 comes out as a box in
-   the game's font. */
+   the game's font.
+
+   VANILLA'S CROSS IS A 25x25 SPRITE IN 160/160/160, and neither number is copied here: the colour waits for
+   the gamma step with every other colour on the page (see `body`), and the size is not measured - a 22px Caveat
+   X stands about 15px tall, so this glyph is smaller than the game's and only an eye can say by how much. */
 .shot-cross {
   flex: 1;
   font-family: game-hand;
@@ -562,6 +640,44 @@ body {
 
 .star.on { color: #e0a72c; }
 
+/*
+  THE TICK BOX, IN THE CORNER THE STAR HAS ON A SEED.
+
+  A slot filter is a LIST BEING BUILT, not one choice, so the one thing every tile has to carry is whether this
+  item is on the list. There are no favourites in that mode and no star, so the corner is free.
+
+  TWO BOXES, BOTH ALWAYS DRAWN, AND THAT IS THE WHOLE POINT. The frame never changes; the mark inside it is
+  taken away with `transform: scale(0)` and brought back with `scale(1)`. A transform is the one write this
+  engine answers by repainting the SINGLE box that was written (Sideload/Css/PaintOnlyProperties.cs) - so a
+  click costs no render at all. Every other way of drawing a tick costs the whole page: `display` and any
+  border WIDTH are read by the flex pass, and `color` and `opacity` are inherited and cascade into children,
+  which is why neither is on the paint-only list. On 138 items that is the difference between nothing and a
+  quarter-second freeze per tick.
+*/
+.tick {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 15px;
+  height: 15px;
+  border: 1.6px solid #3a3d42;
+  border-radius: 3px;
+  /* Paler than the tile it stands on, so an EMPTY box still reads as a control rather than as a hole in the
+     drawing. The paper is lit and the ink is not - a hairline alone is gone by nightfall. */
+  background: #f2f3f5;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The mark. White in the file and tinted here ONCE - `color` is inherited, so it is on the rebuild path and
+   must never be the thing that changes. Its size comes from CSS alone: the layout runs without Unity and
+   cannot read a PNG, so an image with no width is a box of nothing. */
+.tick-mark {
+  width: 11px;
+  height: 11px;
+  color: #2b3c66;
+}
+
 /* The opposite corner from the star, and only drawn while the Hidden chip is on. */
 .hide {
   position: absolute;
@@ -612,8 +728,8 @@ body {
 */
 .tip {
   position: absolute;
-  /* THE LINE'S OWN TOP, AND AS TALL AS A TILE - the height is written in script, because only the mod knows how
-     big a tile came out (see tileSize). The slip is centred in that box, which is what puts the slip's middle,
+  /* THE LINE'S OWN TOP, AND AS TALL AS A TILE - the height is written in script, because a tile is sized there
+     (see TILE in app.js). The slip is centred in that box, which is what puts the slip's middle,
      the tile's middle and the arrow on one line. Held six pixels down with no height, the arrow was level with
      the tile and two thirds of the way down a slip that is thirty pixels tall, which is the "Pfeilspitze nicht
      richtig positioniert" of #240. */

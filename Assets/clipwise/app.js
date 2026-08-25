@@ -1,6 +1,12 @@
 /*
-  The picker, as a pad: vanilla's own seed card is the top sheet, and the next sheet hangs off its perforated
+  The picker, in two shapes.
+
+  A FIELD picker is a pad: vanilla's own seed card is the top sheet, and the next sheet hangs off its perforated
   edge and lies past the right edge of the board.
+
+  A SLOT FILTER is ONE sheet - vanilla's card and nothing else, because that mode builds a list of hundreds of
+  items and the second sheet is a record that has to be laid out again on every hover. See `solo` and
+  `soloShell`.
 
   Wire format is deliberately flat: `picker.view` answers one JSON object, `picker.pick` takes one item id,
   `picker.fav` stars one, `picker.back` closes without choosing. Everything else - what was typed, which filter
@@ -20,25 +26,42 @@
 
 const $ = (id) => document.getElementById(id);
 
-/* The grid. Five to a line and seven between them; the size of a tile is not a constant, because the sheet it
-   has to fill is vanilla's card and only the mod can measure that - see tileSize. */
-const PER_ROW = 5;
-const TILE_GAP = 7;
+/*
+  THE GRID IS VANILLA'S GRID, MEASURED, NOT DIVIDED OUT OF THE ROOM.
 
-/* What a tier group is set in from its section, so the tiles line up with the heading over them. */
+  The card this page replaces lays its options out with a GridLayoutGroup: cell 74x74, spacing 0, padding 0,
+  starting 25 in from the left edge of a 420 card. Inside each cell sits a 69x69 outline - 2.5 of bare paper on
+  every side - and a 60x60 icon. A tile HERE is that outline, so a tile plus a gap is one of the game's cells.
+
+  A FIXED TILE, AND THE COLUMNS DIVIDED OUT INSTEAD. It used to be the other way round: five columns fixed and
+  the size divided out of whatever sheet the mod measured, which put 62px tiles on vanilla's own card and 74s
+  nowhere. The game does the opposite - its cell never changes size, and a wider box simply holds more of them
+  (its constraint is Flexible). So does this: 69 everywhere, and `gridCols` counts how many fit. That matters
+  off the clipboard, where the mod has nothing to measure and falls back to a wider page
+  (SurfacePicker.FallbackWidth) - a slot filter is reached from a shelf, so for that mode it is the normal case.
+*/
+let PER_ROW = 5;
+const PER_ROW_MIN = 5;
+
+/* Vanilla's outline: 69 of tile and 5 of gap make one 74 cell. */
+const TILE = 69;
+const TILE_GAP = 5;
+
+/* The outline's own stroke, 3.4px (the sprite is sliced at 102/512 with a pixelsPerUnitMultiplier of 30). A box
+   is measured border-box here, so what is left inside a tile for the picture is TILE - 2 * TILE_INK. */
+const TILE_INK = 3.4;
+
+/* The first cell's 2.5 of bare paper, which is `.line`'s own left margin: the cells start at vanilla's 25 and
+   the outlines inside them at 27.5. */
+const GRID_INSET = 2.5;
+
+/* What a tier heading is set in from its section. The TILES under it are not set in with it - at a 74 cell
+   there is nothing left over to indent them by, see `.line`. */
 const TIER_INDENT = 14;
-
-/* The floor is the design's own 57. The ceiling is vanilla's tile, which this page has no business exceeding
-   on the game's own card. */
-const TILE_MIN = 57;
-const TILE_MAX = 74;
-
-/* Worked out once per render and written onto every tile and picture - see tileSize. */
-let TILE = TILE_MIN;
 
 /* The side padding of each page, from app.css. The mod sends the page widths; what is left after the padding
    is the only width this script can lay anything out against. */
-const PAD_LEFT = 50;    // .page.left  - 20 + 30, the right one clearing the fold and the perforation
+const PAD_LEFT = 40;    // .page.left  - 25 + 15, vanilla's own inset less the 10 `.list` keeps for the bar
 const PAD_RIGHT = 54;   // .page.right - 32 + 22, the left one clearing the other half of the crease
 
 /* `.list`'s own right padding. The scroll bar is painted OVER the content rather than laid out beside it, so
@@ -57,6 +80,28 @@ let view = {
 };
 
 let query = '';
+
+/*
+  TWO MODES, AND THEY ARE NOT THE SAME SCREEN.
+
+  A FIELD picker chooses one seed and closes, and it is a pad: vanilla's card plus a second sheet carrying the
+  record of whatever the pointer is on.
+
+  A SLOT FILTER builds a list. It stays open while items go on and come off, it runs to three hundred items and
+  more, and the record sheet is the single most expensive thing on the page - a document write is the whole page
+  rebuilt on the mod's side, so every hover paid for one. On one sheet it does not exist, the opening fold does
+  not run, and what is left is exactly vanilla's own card at vanilla's own size.
+
+  `mode` decides the CONTROLS (tick boxes, no stars, no favourites); the width the mod measured decides the
+  GEOMETRY. They agree - SurfacePicker sends `pageRW: 0` in filter mode - but each is read where it belongs, so
+  neither can silently answer for the other.
+*/
+function filtering() { return view.mode === 'filter'; }
+function solo() { return !(view.pageRW > 0); }
+
+/** One flat A-Z grid instead of a group per class. The way out for a player who knows the name and not the
+    class it was filed under - see filterChips. */
+let flat = false;
 
 /*
   Filters are independent toggles, not one choice out of a list, because that is what they were before this
@@ -214,7 +259,41 @@ function shell() {
   const right = Math.round(view.pageRW || left);
 
   $('pageL').style.width = left + 'px';
-  $('pageR').style.width = right + 'px';
+
+  // There is no second sheet in filter mode and no node to write to - see soloShell.
+  if (!solo()) $('pageR').style.width = right + 'px';
+}
+
+/*
+  ONE SHEET, AND THE OTHER IS TAKEN OUT OF THE DOCUMENT RATHER THAN HIDDEN.
+
+  Run once, after the view has arrived and before the first render.
+
+  A hidden node is still a DOM node and still a cascade cost; a removed one is neither. The perforation alone is
+  seventeen boxes whose entire job is to say that a second sheet hangs off this edge, and in this mode none does.
+
+  What this buys, in the two units that matter on this page:
+    - the record sheet is GONE, so a hover costs one page rebuild instead of two;
+    - there is no fold to play, so the picker opens with ONE render instead of the two `flip` needs.
+
+  THE PADDING IS THE SAME IN BOTH MODES NOW. It used to be widened here, because the 30px that cleared the fold
+  was 30px the grid could have back and it bought five pixels on every tile. The tile no longer takes what is
+  left over - it is vanilla's 69 either way - so the room a missing fold frees buys a COLUMN when there is one
+  to be had, and nothing when there is not.
+*/
+function soloShell() {
+  if (!solo()) return;
+
+  const page = $('pageR');
+  if (page) page.remove();
+  const fold = $('foldL');
+  if (fold) fold.remove();
+  const perf = $('perf');
+  if (perf) perf.remove();
+
+  // Nothing is waiting for a fold, so the first render is the finished page.
+  opened = true;
+  foldAt = 1;
 }
 
 /** What is left of the top sheet after its own padding: the width everything on it is laid out against. */
@@ -237,20 +316,16 @@ function recRoom() {
   return rightRoom() - BUD_W - BUD_GAP;
 }
 
-/*
-  A TILE IS AS BIG AS THE SHEET ALLOWS, and the stylesheet cannot say how big that is.
+/** The width a line of tiles is laid out in: the list, less the bare paper the first cell starts with. */
+function gridRoom() {
+  return listRoom() - GRID_INSET;
+}
 
-  Five 57px tiles and four gaps come to 313 in a 370px sheet, so the design's own number left sixty pixels of
-  bare paper down the right-hand side of every line - the grid hanging left of a rule that ran to the fold. The
-  size is therefore divided out of the room instead, off the width the mod measured on vanilla's card.
-
-  MEASURED AGAINST THE NARROWEST LINE, which is a tier group: it is set in 14px and its tiles have to be the
-  same size as everything above it, or a group reads as a different grid rather than part of one.
-*/
-function tileSize() {
-  const room = listRoom() - TIER_INDENT;
-  const size = Math.floor((room - TILE_GAP * (PER_ROW - 1)) / PER_ROW);
-  return Math.max(TILE_MIN, Math.min(TILE_MAX, size));
+/** How many of vanilla's cells the sheet holds, never fewer than the design's five - see PER_ROW. A cell is a
+    tile and a gap; the last one on the line needs no gap after it, which is what the addition is for. On a 420
+    card this is 367.5 + 5 over 74, and the answer is 5. */
+function gridCols() {
+  return Math.max(PER_ROW_MIN, Math.floor((gridRoom() + TILE_GAP) / (TILE + TILE_GAP)));
 }
 
 /* ---- the filter chips ------------------------------------------------------------------------------------ */
@@ -275,10 +350,52 @@ function chip(row, label, on, act) {
   return button;
 }
 
-function renderChips() {
+/*
+  A SLOT FILTER'S OWN CONTROLS, AND THEY ARE NOT THE SEED PICKER'S.
+
+  Favourites, effects and hidden rows are the three questions a breeder asks of a seed catalogue. None of them
+  is asked here: there are no stars in this mode, a lamp has no effects, and the dock those effect chips lived
+  in was on the sheet that is gone. What is left is the two questions three hundred items actually raise - how
+  is this ordered, and can I see all the class headings at once.
+*/
+function filterChips(rows) {
+  const wanted = [];
+
+  // BY CLASS IS THE DEFAULT, because that is the order the game's own filter grid uses and the order the
+  // headings are. A-Z is the way out of it for somebody who knows the name and not the class.
+  chip(wanted, flat ? 'Sort: A-Z' : 'Sort: class', flat, () => { flat = !flat; });
+
+  // Only while there are headings to fold. Eleven classes over 138 vanilla items is six sheets of scrolling;
+  // folded, the same list is an index that fits on one.
+  if (!flat) {
+    const keys = drawnKeys(rows);
+    const shut = keys.length > 0 && keys.every((k) => folded.has(k));
+    chip(wanted, shut ? 'Unfold all' : 'Fold all', shut, () => {
+      for (const k of keys) { if (shut) folded.delete(k); else folded.add(k); }
+    });
+  }
+
+  if (query) {
+    chip(wanted, 'Clear', false, () => {
+      query = '';
+      $('find').value = '';
+      // A keystroke waiting for its render would otherwise land after this one and type the query back in.
+      findWant = null;
+    });
+  }
+
+  return wanted;
+}
+
+function renderChips(rows) {
   const box = $('chips');
   box.replaceChildren();
 
+  const wanted = filtering() ? filterChips(rows || []) : seedChips();
+  layoutChips(box, wanted);
+}
+
+function seedChips() {
   const wanted = [];
 
   chip(wanted, 'Favorites', f.fav, () => { f.fav = !f.fav; remember(); });
@@ -321,6 +438,11 @@ function renderChips() {
     });
   }
 
+  return wanted;
+}
+
+/** No flex-wrap in this engine, so the rows are cut here - see chipWidth for why the widths are estimated. */
+function layoutChips(box, wanted) {
   const room = leftRoom();
   let row = null;
   let used = 0;
@@ -506,6 +628,37 @@ let slipAt = 0;
 /** The Any tile has no row of its own, so it points at this. Compared by identity, never by id. */
 const ANY = { id: ' any', name: 'Any' };
 
+/*
+  EVERY TILE ON THE PAGE THAT SHOWS THE SAME ITEM, by item id. Only filled while building a slot filter's list.
+
+  A LIST PER ID RATHER THAN ONE NODE, because an item can be on the page more than once and the two copies have
+  to say the same thing about one filter.
+
+  EVERY WRITE HERE IS PAINT-ONLY (Sideload/Css/PaintOnlyProperties.cs), and that is the entire reason a filter
+  can be built without the list flickering. `outline` and `transform` repaint the single box they were written
+  to; the RENDER COUNT DOES NOT MOVE. A class, a `display`, a border WIDTH or a `color` would each rebuild the
+  page - every GameObject destroyed and made again - which at 138 items is about a quarter of a second per
+  click, per tile.
+
+  Two nodes per copy, because the tick is two boxes: the tile carries the outline that makes a ticked item
+  findable at a glance across the grid, and the box in the corner carries the mark itself.
+
+  Thrown away with the grid, like `tipAt`.
+*/
+let tickAt = {};
+
+/** Draws the tick, or takes it away, on every copy of one item. `none` rather than a width of zero: an outline
+    takes no room either way, and "none" is what the style applier reads as off. `scale(0)` rather than
+    `display` for the mark, for exactly the same reason - see the block above. */
+function markTick(itemId, on) {
+  const nodes = tickAt[itemId];
+  if (!nodes) return;
+  for (const at of nodes) {
+    if (at.tile) at.tile.style.outline = on ? '2px solid #3a3d42' : 'none';
+    if (at.mark) at.mark.style.transform = on ? 'scale(1)' : 'scale(0)';
+  }
+}
+
 /** A class write that is skipped when it would change nothing: every write to the document rebuilds the page,
     so a write that says what the node already says costs a whole rebuild for no change at all. */
 function setClass(node, name) {
@@ -624,11 +777,14 @@ function hoverPaint(record) {
 
   const now = tipAt[shownAt];
   if (now && view.tips !== false && shown && shown !== ANY) {
-    fillTip(now.node, shown, now.col, now.indent);
+    fillTip(now.node, shown, now.col);
     slipAt = shownAt;
   }
 
-  if (record) renderSheet();
+  // The record lives on the second sheet, and a filter list does not have one. What is left is the label on the
+  // tile's own line, which is the half that answers "which one is this" - and it is also the cheaper half: the
+  // record was a second full page rebuild on top of this one, for every tile the pointer settled on.
+  if (record && !solo()) renderSheet();
 }
 
 /** One "LABEL value" line, and only when there is a value. A record that promises a field and shows nothing
@@ -916,11 +1072,10 @@ function tipX(col) {
   return col * (TILE + TILE_GAP);
 }
 
-/** How wide the label may be at this column, on the side it will stand. A tier group's line starts 14 in, so
-    that much less paper is left beside it. */
-function tipRoom(col, flip, indent) {
-  const room = listRoom() - (indent ? TIER_INDENT : 0);
-  return flip ? tipX(col) - TIP_GAP : room - (tipX(col) + TILE + TIP_GAP);
+/** How wide the label may be at this column, on the side it will stand. Measured in the line's own room, which
+    is the same for every line on the sheet now that a tier group is not set in - see `.line`. */
+function tipRoom(col, flip) {
+  return flip ? tipX(col) - TIP_GAP : gridRoom() - (tipX(col) + TILE + TIP_GAP);
 }
 
 /** Estimated, because nothing can be measured before it is drawn: the hand at 18px runs a little over eight
@@ -959,7 +1114,7 @@ function tipWidth(name, tier) {
 function tipNode() {
   const tip = el('div', 'tip');
 
-  // AS TALL AS THE TILE IT POINTS AT, which is a number the stylesheet does not have - see tileSize. The slip
+  // AS TALL AS THE TILE IT POINTS AT, which is a number the stylesheet does not have - see TILE. The slip
   // inside is centred in that height, so the tile's middle, the slip's middle and the arrow are ONE line
   // instead of three. Sitting at the top of the line with a fixed offset, the arrow came out level with the
   // tile's centre but near the BOTTOM edge of a slip that is only thirty pixels tall.
@@ -989,7 +1144,7 @@ function tipNode() {
   bought no animation at all and cost a second full rebuild of the page - at five hundred seeds, another
   second of frozen screen for every tile the pointer touched.
 */
-function fillTip(node, row, col, indent) {
+function fillTip(node, row, col) {
   if (!node) return;
 
   const name = row.name || row.id;
@@ -1001,7 +1156,7 @@ function fillTip(node, row, col, indent) {
   body.children[1].textContent = tier;
 
   const flip = col >= PER_ROW - 2;
-  const width = Math.max(TIP_MIN, Math.min(tipWidth(name, tier), tipRoom(col, flip, indent)));
+  const width = Math.max(TIP_MIN, Math.min(tipWidth(name, tier), tipRoom(col, flip)));
 
   node.style.width = width + 'px';
   node.style.left = (flip ? tipX(col) - width - TIP_GAP : tipX(col) + TILE + TIP_GAP) + 'px';
@@ -1027,20 +1182,20 @@ function hideTip(slot) {
   if (at && at.node) at.node.style.transform = 'scaleX(0)';
 }
 
-/** Square, at whatever size the sheet allowed this render. The picture is inset by the same six pixels the
-    design has at 57 - and that inset is the shot's own `padding`, because the shot IS the picture.
+/** Square, at vanilla's own 69. What is inside the outline is the tile less its stroke on both sides, and the
+    picture is inset from THAT by the shot's own `padding` - 1.1 - which leaves the 60x60 the game draws its
+    icon at.
 
-    An `<img>` is drawn inside its CONTENT box (Sideload/Paint/Painter.cs:1200-1208), so a 61px box with 2px
-    of padding puts a 57px vial exactly where a 57px child of a 61px button used to sit.
+    An `<img>` is drawn inside its CONTENT box (Sideload/Paint/Painter.cs:1200-1208), so the padding places the
+    picture exactly where a 60px child of a 62.2px button would have sat.
 
-    ONLY THE HEIGHT IS WRITTEN HERE. The width is the tile's content box, and that is not the same number on
-    every tile: the Any tile's border is 1.6px, so its shot is 59.8 wide where a seed's is 61. Written as 61
-    for both, the Any tile's cross moved half a pixel off centre - see tileNode for the one shot that does
-    need a width of its own. */
+    ONLY THE HEIGHT IS WRITTEN HERE; the width is the tile's content box, which every tile now shares - the Any
+    tile carries the same 3.4px outline as a seed's, because in the game it is the same prefab. See tileNode for
+    the one shot that still needs a width of its own. */
 function sizeTile(tile, shot) {
   tile.style.width = TILE + 'px';
   tile.style.height = TILE + 'px';
-  if (shot) shot.style.height = (TILE - 2) + 'px';
+  if (shot) shot.style.height = (TILE - 2 * TILE_INK) + 'px';
 }
 
 /** Keeps the place of a tile on a short last line. */
@@ -1050,10 +1205,34 @@ function holeNode() {
   return hole;
 }
 
-/** One tile: the seed's own picture and its star. Pointing at it fills the record on the facing sheet and the
-    label on its own line. */
+/** One tile: the item's own picture, and beside it the star that makes a seed a favourite or the box that puts
+    an item on a slot filter. Pointing at it lights the label on its own line, and on the field picker also fills
+    the record on the facing sheet. */
 function tileNode(row, slot) {
-  const tile = el('div', 'tile' + (row.sel ? ' sel' : ''));
+  // A SLOT FILTER IS A LIST, NOT A CHOICE, so its tick is not the chooser's `sel` border: the picker stays up
+  // while items go on and come off, and a class change rebuilds the whole page. See `markTick`.
+  const filter = filtering();
+  const tile = el('div', 'tile' + (row.sel && !filter ? ' sel' : ''));
+
+  if (filter && row.sel) tile.style.outline = '2px solid #3a3d42';
+
+  /*
+    ON OR OFF THE LIST, WRITTEN ONCE AND SHARED BY BOTH TARGETS.
+
+    The picture and the tick box are two hit targets on one tile and they do the same thing, because on a grid
+    of pictures the picture is what a player aims at - the box in the corner SAYS the state, it is not the only
+    way to reach it.
+
+    The answer is the state the GAME ended in, never the one that was asked for: the write goes out through the
+    slot's owner and can be refused, and a tick over a filter that did not take it is worse than no tick.
+  */
+  const toggle = () => {
+    if (closing) return;
+    const answer = s1.call('picker.pick', row.id);
+    if (answer !== 'on' && answer !== 'off') return;
+    row.sel = answer === 'on';
+    markTick(row.id, row.sel);
+  };
 
   // THE PICTURE IS THE BUTTON. A vial used to be an `<img>` inside a `<button>`, and the two of them are two
   // uGUI boxes at about 0.45ms each on every write to the document - see the rebuild cost at the top of this
@@ -1073,33 +1252,67 @@ function tileNode(row, slot) {
     : img('shot shot-item shot-img', 's1://icon/' + row.id);
   sizeTile(tile, pick);
   // A picture is not stretched to its box the way a button is: the layout runs without Unity, cannot open a
-  // PNG, and an image with no width is a box of nothing. A seed's tile has a 1px border on both sides.
-  if (row.icon !== false) pick.style.width = (TILE - 2) + 'px';
-  // Not while the sheet is folding away: the tiles are still on screen and still take a click, and a seed
-  // chosen after the player asked to leave is written to the pot exactly as if they had meant it.
-  pick.addEventListener('click', () => { if (!closing) s1.call('picker.pick', row.id); });
+  // PNG, and an image with no width is a box of nothing. A tile carries vanilla's 3.4px outline on both sides.
+  if (row.icon !== false) pick.style.width = (TILE - 2 * TILE_INK) + 'px';
+  // NOT WHILE THE SHEET IS FOLDING AWAY - the tiles are still on screen and still take a click, and a seed
+  // chosen after the player asked to leave is written to the pot exactly as if they had meant it. On a filter
+  // that guard is inside `toggle`; a chooser has nothing left to draw after its call, because picking closes
+  // the picker.
+  pick.addEventListener('click', () => {
+    if (filter) { toggle(); return; }
+    if (!closing) s1.call('picker.pick', row.id);
+  });
   // The TILE, not the seed: a favourite is on the page twice and only one of them is under the pointer.
   pick.addEventListener('mouseenter', () => showRecord(row, slot));
   // The slip goes when the pointer does - see leaveRecord.
   pick.addEventListener('mouseleave', () => leaveRecord(slot));
   tile.appendChild(pick);
 
-  // The same trade as the vial above: one box, not two. The button was fifteen pixels so that the mark had a
-  // target around it, and the picture is still eleven - the four pixels are the image's own `padding` now.
-  const star = img('star' + (row.fav ? ' on' : ''), 'star.png');
-  // The star stands ON the tile, so drifting five pixels onto it has not left the seed - it says so itself
-  // rather than letting the picture's own leave take the slip away.
-  star.addEventListener('mouseenter', () => showRecord(row, slot));
-  star.addEventListener('mouseleave', () => leaveRecord(slot));
-  star.addEventListener('click', () => {
-    row.fav = s1.call('picker.fav', row.id) === 'on';
-    render();
-  });
-  tile.appendChild(star);
+  if (filter) {
+    /*
+      THE TICK BOX, IN THE CORNER THE STAR HAS ON A SEED.
 
-  // Only while the Hidden chip is on. A tile is fifty-seven pixels wide and cannot carry two permanent buttons,
-  // and hiding things is a tidying-up job rather than something done in passing.
-  if (f.hidden) {
+      A slot filter has no favourites and no star - a list of allowed items is not a list of liked ones - so
+      the corner is free for the one control this mode needs: is this item on the list.
+
+      APPENDED AFTER THE PICTURE. There is no z-index here and paint order is document order, so a box written
+      before the vial is painted underneath it.
+
+      BOTH BOXES ARE MADE ONCE AND NEITHER IS EVER ADDED OR REMOVED AGAIN. A click writes one `transform` on
+      the mark and one `outline` on the tile, and both are paint-only - see markTick.
+    */
+    const tick = el('div', 'tick');
+    const mark = img('tick-mark', 'tick.png');
+    if (!row.sel) mark.style.transform = 'scale(0)';
+    tick.appendChild(mark);
+
+    tick.addEventListener('click', toggle);
+    // The box stands ON the tile, so drifting five pixels onto it has not left the item - it says so itself
+    // rather than letting the picture's own leave take the label away.
+    tick.addEventListener('mouseenter', () => showRecord(row, slot));
+    tick.addEventListener('mouseleave', () => leaveRecord(slot));
+
+    (tickAt[row.id] || (tickAt[row.id] = [])).push({ tile: tile, mark: mark });
+    tile.appendChild(tick);
+  } else {
+    // The same trade as the vial above: one box, not two. The button was fifteen pixels so that the mark had a
+    // target around it, and the picture is still eleven - the four pixels are the image's own `padding` now.
+    const star = img('star' + (row.fav ? ' on' : ''), 'star.png');
+    // The star stands ON the tile, so drifting five pixels onto it has not left the seed - it says so itself
+    // rather than letting the picture's own leave take the slip away.
+    star.addEventListener('mouseenter', () => showRecord(row, slot));
+    star.addEventListener('mouseleave', () => leaveRecord(slot));
+    star.addEventListener('click', () => {
+      row.fav = s1.call('picker.fav', row.id) === 'on';
+      render();
+    });
+    tile.appendChild(star);
+  }
+
+  // Only while the Hidden chip is on, and that chip is the seed picker's - see filterChips. A tile is
+  // fifty-seven pixels wide and cannot carry two permanent buttons, and hiding things is a tidying-up job
+  // rather than something done in passing.
+  if (f.hidden && !filter) {
     const hide = el('button', 'hide' + (row.hidden ? ' on' : ''), row.hidden ? 'o' : 'x');
     hide.addEventListener('click', () => {
       row.hidden = s1.call('picker.hide', row.id) === 'on';
@@ -1119,7 +1332,7 @@ function tileNode(row, slot) {
   taken from the index: past that tile every seed on the line sits one column further right, and the column is
   what places the hover label.
 */
-function grid(box, rows, indent) {
+function grid(box, rows) {
   let line = null;
   let tip = null;
   let col = 0;
@@ -1129,7 +1342,7 @@ function grid(box, rows, indent) {
 
   const open = () => {
     close();
-    line = el('div', indent ? 'line in' : 'line');
+    line = el('div', 'line');
     tip = tipNode();
     box.appendChild(line);
     col = 0;
@@ -1148,11 +1361,11 @@ function grid(box, rows, indent) {
 
     // Where this tile's label is and how it is placed, so a hover can fill it without the grid being rebuilt to
     // find it - see `tipAt`.
-    tipAt[slot] = { node: tip, col: col, indent: indent };
+    tipAt[slot] = { node: tip, col: col };
 
     // The line's own label, filled only for the TILE the pointer is on.
     if (view.tips !== false && shown && shown !== ANY && shown.id === row.id && shownAt === slot) {
-      fillTip(tip, row, col, indent);
+      fillTip(tip, row, col);
       slipAt = slot;
     }
     col++;
@@ -1232,7 +1445,7 @@ function modSection(box, key, rows) {
   const tiers = tiersOf(rows);
   sectionHead(box, tabLabel(key), rows.length, tierGroups && tiers.length > 1, true);
 
-  if (!tierGroups) { grid(box, rows, false); return; }
+  if (!tierGroups) { grid(box, rows); return; }
 
   for (const tier of tiers) {
     const group = rows.filter((row) => (row.tier || 0) === tier);
@@ -1250,7 +1463,7 @@ function modSection(box, key, rows) {
     }
 
     // Set in with its heading. A tier is a division of the section above it, not a grid of its own.
-    grid(box, group, tier > 0);
+    grid(box, group);
   }
 }
 
@@ -1284,6 +1497,79 @@ function anyTile() {
   return tile;
 }
 
+/* ---- the filter list ------------------------------------------------------------------------------------- */
+
+/** Sections the player has folded shut, by category key. Kept in the page: a fold is a way of looking at the
+    list, not a setting, and it must not cost a bridge call. */
+const folded = new Set();
+
+/** The classes that actually have something under them in THIS list, in the game's own order first and then
+    whatever a mod filed under a heading of its own. Wanted in two places - the fold-all chip and the list - so
+    it is worked out from the rows rather than from `view.tabs`, which names every class the save knows. */
+function drawnKeys(rows) {
+  const keys = [];
+  for (const tab of view.tabs || []) if (keys.indexOf(tab.id) < 0) keys.push(tab.id);
+  for (const row of rows) if (keys.indexOf(row.tab || '') < 0) keys.push(row.tab || '');
+  return keys.filter((key) => rows.some((row) => (row.tab || '') === key));
+}
+
+/*
+  A CLASS HEADING, AND THE TITLE ITSELF IS THE SWITCH.
+
+  Folding is the thing that makes a list of 138 items usable on one sheet, so it is not tucked into a knob at
+  the far end of the line: the name a player is reading is the thing they press. The knob stays as well, and
+  it is not a duplicate - it is the only part of the head that SAYS which way the class is, and a heading that
+  folds on a click with nothing to show for it in the closed state is a heading that looks broken.
+
+  A FOLD IS A FULL REBUILD and there is no way around that one: the tiles under the heading really do stop
+  existing. It is the one gesture on this page that is allowed to cost a render.
+*/
+function foldHead(box, key, name, count) {
+  const shut = folded.has(key);
+  const flip = () => {
+    if (shut) folded.delete(key); else folded.add(key);
+    render();
+  };
+
+  const head = el('div', 'section');
+
+  const title = el('button', 'section-name', name);
+  title.addEventListener('click', flip);
+  head.appendChild(title);
+
+  head.appendChild(el('div', 'section-fill'));
+
+  const knob = el('button', 'knob' + (shut ? '' : ' on'), shut ? 'Show' : 'Hide');
+  knob.addEventListener('click', flip);
+  head.appendChild(knob);
+
+  head.appendChild(el('div', 'section-count', String(count)));
+  box.appendChild(head);
+}
+
+/*
+  ONE SECTION PER CLASS, FOLDABLE, AND NO FAVOURITES ROW.
+
+  A star says "I like this seed"; a slot filter says "this shelf accepts this item". They are different
+  questions and the second one has no use for the first, so this list has neither a Favourites section nor a
+  star on a tile - the corner carries the tick box instead.
+
+  It also means an item is on this page EXACTLY ONCE, where a starred seed on the field picker is drawn twice.
+  `tickAt` still keeps a list per id anyway: it costs nothing and it is what stops the two copies disagreeing
+  the day something does put one here twice.
+*/
+function renderFilterRows(box, rows) {
+  // A-Z across the whole list, headings and all. The way out for somebody who knows the name of the thing and
+  // not which class the game filed it under.
+  if (flat) { grid(box, rows.slice().sort(byName)); return; }
+
+  for (const key of drawnKeys(rows)) {
+    const group = rows.filter((row) => (row.tab || '') === key);
+    foldHead(box, key, tabLabel(key), group.length);
+    if (!folded.has(key)) grid(box, group);
+  }
+}
+
 function renderRows(rows) {
   const box = $('rows');
   box.replaceChildren();
@@ -1293,15 +1579,21 @@ function renderRows(rows) {
   slots = 0;
   tipAt = [];
   slipAt = 0;
+  tickAt = {};
 
   pendingLead = view.none ? anyTile() : null;
 
   if (rows.length === 0) {
     // Still drawn: with everything filtered away, clearing the field is the one thing left to do here.
-    if (pendingLead) grid(box, [], false);
+    if (pendingLead) grid(box, []);
     box.appendChild(el('div', 'empty', query ? 'Nothing matches "' + query + '".' : 'Nothing to pick here.'));
     return;
   }
+
+  // A SLOT FILTER IS A DIFFERENT LIST, so it gets different headings: the game's own categories, in the game's
+  // own order, each one foldable. The vanilla/mod split below is right for a seed field, where "Vanilla" is
+  // five seeds; over three hundred items it is a heading that groups nothing.
+  if (filtering()) { renderFilterRows(box, rows); return; }
 
   // Favourites first, from both halves - a vanilla seed can be starred too - and they stay in their own section
   // as well, which is what the game's product page does with a starred product.
@@ -1322,12 +1614,12 @@ function renderRows(rows) {
 
   if (favs.length) {
     sectionHead(box, 'Favourites', favs.length, false, false);
-    grid(box, favs, false);
+    grid(box, favs);
   }
 
   if (vanilla.length) {
     sectionHead(box, 'Vanilla seeds', vanilla.length, false, orphanSort);
-    grid(box, vanilla, false);
+    grid(box, vanilla);
   }
 
   for (const key of keys) modSection(box, key, modded.filter((row) => (row.tab || '') === key));
@@ -1375,10 +1667,14 @@ function render() {
 
   shell();
 
-  // Divided out of the sheet the mod measured, before anything is laid out against it.
-  TILE = tileSize();
+  // Counted off the sheet the mod measured, before anything is laid out against it. The tile itself is not
+  // divided out of anything - it is vanilla's 69 on any sheet.
+  PER_ROW = gridCols();
 
-  $('pageR').className = 'page right' + (opened ? '' : ' shut');
+  // The second sheet, and everything that only exists to fill it. On one sheet those nodes are not hidden,
+  // they are gone - see soloShell - so this is not a saving, it is the difference between working and throwing.
+  const one = solo();
+  if (!one) $('pageR').className = 'page right' + (opened ? '' : ' shut');
 
   $('title').textContent = view.title || 'Select';
 
@@ -1387,10 +1683,10 @@ function render() {
   $('count').textContent = rows.length === all ? String(all) : rows.length + ' of ' + all;
   centreHead();
 
-  renderChips();
+  renderChips(rows);
   renderRows(rows);
-  renderSheet();
-  renderDock();
+
+  if (!one) { renderSheet(); renderDock(); }
 }
 
 /* ---- the fold -------------------------------------------------------------------------------------------- */
@@ -1495,10 +1791,20 @@ function shut(how) {
   // before the first frame is drawn, because the answer is what the mod times its patience against.
   s1.call('picker.shutting');
 
+  const stepMs = how === 'slow' ? FLIP_STEP_MS * 8 : FLIP_STEP_MS;
+
+  // NOTHING TO FOLD ON ONE SHEET, so the picker leaves at once instead of playing 300ms of an effect on a page
+  // that has no second sheet to close. The mod is still told first and still waits for this call - see
+  // SurfacePicker.RequestClose - because that handshake is what stops the surface being torn down under a page
+  // that is still writing to it.
+  if (solo()) {
+    setTimeout(() => s1.call('picker.back'), stepMs);
+    return;
+  }
+
   // From where the sheet is, not from full width: Escape landing in the middle of the opening fold closes the
   // sheet it can actually see rather than snapping it open first.
   const from = foldAt;
-  const stepMs = how === 'slow' ? FLIP_STEP_MS * 8 : FLIP_STEP_MS;
   foldSheet((t) => from * (1 - Math.pow(t, 3)), () => {
     setTimeout(() => s1.call('picker.back'), stepMs);
   }, stepMs);
@@ -1594,5 +1900,13 @@ function iconsCatchUp() {
 }
 
 load();
+
+// Before the first render: it takes the second sheet OUT of the document, and everything below is laid out
+// against a page that no longer has one.
+soloShell();
+
 render();
-flip();
+
+// One sheet opens with one render. The pad's second sheet opens with the fold, and `flip` renders again when it
+// lands - see soloShell for what that costs.
+if (!solo()) flip();
