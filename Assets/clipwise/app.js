@@ -26,45 +26,43 @@
 
 const $ = (id) => document.getElementById(id);
 
-/* The grid. Five to a line and seven between them; the size of a tile is not a constant, because the sheet it
-   has to fill is vanilla's card and only the mod can measure that - see tileSize. */
 /*
-  FIVE IS THE DESIGN'S NUMBER AND VANILLA'S, AND IT IS NOT A CONSTANT.
+  THE GRID IS VANILLA'S GRID, MEASURED, NOT DIVIDED OUT OF THE ROOM.
 
-  Five 74px cells to a line is what the game's own card does, and on that card this stays 5 forever. But the
-  sheet is not always that card: when the clipboard is not on screen the mod has nothing to measure and falls
-  back to a wider page (SurfacePicker.FallbackWidth), and five tiles there left ninety pixels of bare paper down
-  the right-hand side with the grid hanging left of it. A slot filter is reached from a shelf rather than from
-  the clipboard, so that is not a corner case for this mode - it is the normal one.
+  The card this page replaces lays its options out with a GridLayoutGroup: cell 74x74, spacing 0, padding 0,
+  starting 25 in from the left edge of a 420 card. Inside each cell sits a 69x69 outline - 2.5 of bare paper on
+  every side - and a 60x60 icon. A tile HERE is that outline, so a tile plus a gap is one of the game's cells.
 
-  So the columns are divided out of the room the same way the tile size is, never below the design's five, and
-  never at a tile bigger than vanilla's own. Worked out per render in `gridCols`, before `tileSize`, which reads
-  it.
+  A FIXED TILE, AND THE COLUMNS DIVIDED OUT INSTEAD. It used to be the other way round: five columns fixed and
+  the size divided out of whatever sheet the mod measured, which put 62px tiles on vanilla's own card and 74s
+  nowhere. The game does the opposite - its cell never changes size, and a wider box simply holds more of them
+  (its constraint is Flexible). So does this: 69 everywhere, and `gridCols` counts how many fit. That matters
+  off the clipboard, where the mod has nothing to measure and falls back to a wider page
+  (SurfacePicker.FallbackWidth) - a slot filter is reached from a shelf, so for that mode it is the normal case.
 */
 let PER_ROW = 5;
 const PER_ROW_MIN = 5;
-const TILE_GAP = 7;
 
-/* What a tier group is set in from its section, so the tiles line up with the heading over them. */
+/* Vanilla's outline: 69 of tile and 5 of gap make one 74 cell. */
+const TILE = 69;
+const TILE_GAP = 5;
+
+/* The outline's own stroke, 3.4px (the sprite is sliced at 102/512 with a pixelsPerUnitMultiplier of 30). A box
+   is measured border-box here, so what is left inside a tile for the picture is TILE - 2 * TILE_INK. */
+const TILE_INK = 3.4;
+
+/* The first cell's 2.5 of bare paper, which is `.line`'s own left margin: the cells start at vanilla's 25 and
+   the outlines inside them at 27.5. */
+const GRID_INSET = 2.5;
+
+/* What a tier heading is set in from its section. The TILES under it are not set in with it - at a 74 cell
+   there is nothing left over to indent them by, see `.line`. */
 const TIER_INDENT = 14;
-
-/* The floor is the design's own 57. The ceiling is vanilla's tile, which this page has no business exceeding
-   on the game's own card. */
-const TILE_MIN = 57;
-const TILE_MAX = 74;
-
-/* Worked out once per render and written onto every tile and picture - see tileSize. */
-let TILE = TILE_MIN;
 
 /* The side padding of each page, from app.css. The mod sends the page widths; what is left after the padding
    is the only width this script can lay anything out against. */
-const PAD_LEFT = 50;    // .page.left  - 20 + 30, the right one clearing the fold and the perforation
+const PAD_LEFT = 40;    // .page.left  - 25 + 15, vanilla's own inset less the 10 `.list` keeps for the bar
 const PAD_RIGHT = 54;   // .page.right - 32 + 22, the left one clearing the other half of the crease
-
-/* The same sheet with nothing hanging off its right edge - see soloShell. The 30px that cleared the fold and
-   the perforation is 30px of paper the grid can have back, which is five pixels on every tile. */
-const PAD_SOLO_EDGE = 20;
-const PAD_SOLO = 40;    // 20 + 20
 
 /* `.list`'s own right padding. The scroll bar is painted OVER the content rather than laid out beside it, so
    without this the bar sits on every section count and on the last column of every line. Anything laid out
@@ -278,8 +276,10 @@ function shell() {
     - the record sheet is GONE, so a hover costs one page rebuild instead of two;
     - there is no fold to play, so the picker opens with ONE render instead of the two `flip` needs.
 
-  The padding is written inline rather than through a stylesheet rule because an inline write is the route that
-  is certain to arrive here, and the sheet's own edge is the one measurement the grid is divided out of.
+  THE PADDING IS THE SAME IN BOTH MODES NOW. It used to be widened here, because the 30px that cleared the fold
+  was 30px the grid could have back and it bought five pixels on every tile. The tile no longer takes what is
+  left over - it is vanilla's 69 either way - so the room a missing fold frees buys a COLUMN when there is one
+  to be had, and nothing when there is not.
 */
 function soloShell() {
   if (!solo()) return;
@@ -291,8 +291,6 @@ function soloShell() {
   const perf = $('perf');
   if (perf) perf.remove();
 
-  $('pageL').style.paddingRight = PAD_SOLO_EDGE + 'px';
-
   // Nothing is waiting for a fold, so the first render is the finished page.
   opened = true;
   foldAt = 1;
@@ -300,7 +298,7 @@ function soloShell() {
 
 /** What is left of the top sheet after its own padding: the width everything on it is laid out against. */
 function leftRoom() {
-  return Math.round(view.pageW || 420) - (solo() ? PAD_SOLO : PAD_LEFT);
+  return Math.round(view.pageW || 420) - PAD_LEFT;
 }
 
 /** What is left inside the scrolling list, which is everything the grid and its headings are laid out against. */
@@ -318,31 +316,16 @@ function recRoom() {
   return rightRoom() - BUD_W - BUD_GAP;
 }
 
-/*
-  A TILE IS AS BIG AS THE SHEET ALLOWS, and the stylesheet cannot say how big that is.
-
-  Five 57px tiles and four gaps come to 313 in a 370px sheet, so the design's own number left sixty pixels of
-  bare paper down the right-hand side of every line - the grid hanging left of a rule that ran to the fold. The
-  size is therefore divided out of the room instead, off the width the mod measured on vanilla's card.
-
-  MEASURED AGAINST THE NARROWEST LINE, which is a tier group: it is set in 14px and its tiles have to be the
-  same size as everything above it, or a group reads as a different grid rather than part of one.
-*/
-/** The width a line of tiles is laid out in. A filter list has no tier groups - it is grouped by the game's own
-    class - so nothing on it is set in, and measuring against an indent that never happens would cost every tile
-    five pixels for nothing. */
+/** The width a line of tiles is laid out in: the list, less the bare paper the first cell starts with. */
 function gridRoom() {
-  return listRoom() - (filtering() ? 0 : TIER_INDENT);
+  return listRoom() - GRID_INSET;
 }
 
-/** How many whole tiles at vanilla's own size the sheet holds, never fewer than the design's five - see PER_ROW. */
+/** How many of vanilla's cells the sheet holds, never fewer than the design's five - see PER_ROW. A cell is a
+    tile and a gap; the last one on the line needs no gap after it, which is what the addition is for. On a 420
+    card this is 367.5 + 5 over 74, and the answer is 5. */
 function gridCols() {
-  return Math.max(PER_ROW_MIN, Math.floor((gridRoom() + TILE_GAP) / (TILE_MAX + TILE_GAP)));
-}
-
-function tileSize() {
-  const size = Math.floor((gridRoom() - TILE_GAP * (PER_ROW - 1)) / PER_ROW);
-  return Math.max(TILE_MIN, Math.min(TILE_MAX, size));
+  return Math.max(PER_ROW_MIN, Math.floor((gridRoom() + TILE_GAP) / (TILE + TILE_GAP)));
 }
 
 /* ---- the filter chips ------------------------------------------------------------------------------------ */
@@ -794,7 +777,7 @@ function hoverPaint(record) {
 
   const now = tipAt[shownAt];
   if (now && view.tips !== false && shown && shown !== ANY) {
-    fillTip(now.node, shown, now.col, now.indent);
+    fillTip(now.node, shown, now.col);
     slipAt = shownAt;
   }
 
@@ -1089,11 +1072,10 @@ function tipX(col) {
   return col * (TILE + TILE_GAP);
 }
 
-/** How wide the label may be at this column, on the side it will stand. A tier group's line starts 14 in, so
-    that much less paper is left beside it. */
-function tipRoom(col, flip, indent) {
-  const room = listRoom() - (indent ? TIER_INDENT : 0);
-  return flip ? tipX(col) - TIP_GAP : room - (tipX(col) + TILE + TIP_GAP);
+/** How wide the label may be at this column, on the side it will stand. Measured in the line's own room, which
+    is the same for every line on the sheet now that a tier group is not set in - see `.line`. */
+function tipRoom(col, flip) {
+  return flip ? tipX(col) - TIP_GAP : gridRoom() - (tipX(col) + TILE + TIP_GAP);
 }
 
 /** Estimated, because nothing can be measured before it is drawn: the hand at 18px runs a little over eight
@@ -1132,7 +1114,7 @@ function tipWidth(name, tier) {
 function tipNode() {
   const tip = el('div', 'tip');
 
-  // AS TALL AS THE TILE IT POINTS AT, which is a number the stylesheet does not have - see tileSize. The slip
+  // AS TALL AS THE TILE IT POINTS AT, which is a number the stylesheet does not have - see TILE. The slip
   // inside is centred in that height, so the tile's middle, the slip's middle and the arrow are ONE line
   // instead of three. Sitting at the top of the line with a fixed offset, the arrow came out level with the
   // tile's centre but near the BOTTOM edge of a slip that is only thirty pixels tall.
@@ -1162,7 +1144,7 @@ function tipNode() {
   bought no animation at all and cost a second full rebuild of the page - at five hundred seeds, another
   second of frozen screen for every tile the pointer touched.
 */
-function fillTip(node, row, col, indent) {
+function fillTip(node, row, col) {
   if (!node) return;
 
   const name = row.name || row.id;
@@ -1174,7 +1156,7 @@ function fillTip(node, row, col, indent) {
   body.children[1].textContent = tier;
 
   const flip = col >= PER_ROW - 2;
-  const width = Math.max(TIP_MIN, Math.min(tipWidth(name, tier), tipRoom(col, flip, indent)));
+  const width = Math.max(TIP_MIN, Math.min(tipWidth(name, tier), tipRoom(col, flip)));
 
   node.style.width = width + 'px';
   node.style.left = (flip ? tipX(col) - width - TIP_GAP : tipX(col) + TILE + TIP_GAP) + 'px';
@@ -1200,20 +1182,20 @@ function hideTip(slot) {
   if (at && at.node) at.node.style.transform = 'scaleX(0)';
 }
 
-/** Square, at whatever size the sheet allowed this render. The picture is inset by the same six pixels the
-    design has at 57 - and that inset is the shot's own `padding`, because the shot IS the picture.
+/** Square, at vanilla's own 69. What is inside the outline is the tile less its stroke on both sides, and the
+    picture is inset from THAT by the shot's own `padding` - 1.1 - which leaves the 60x60 the game draws its
+    icon at.
 
-    An `<img>` is drawn inside its CONTENT box (Sideload/Paint/Painter.cs:1200-1208), so a 61px box with 2px
-    of padding puts a 57px vial exactly where a 57px child of a 61px button used to sit.
+    An `<img>` is drawn inside its CONTENT box (Sideload/Paint/Painter.cs:1200-1208), so the padding places the
+    picture exactly where a 60px child of a 62.2px button would have sat.
 
-    ONLY THE HEIGHT IS WRITTEN HERE. The width is the tile's content box, and that is not the same number on
-    every tile: the Any tile's border is 1.6px, so its shot is 59.8 wide where a seed's is 61. Written as 61
-    for both, the Any tile's cross moved half a pixel off centre - see tileNode for the one shot that does
-    need a width of its own. */
+    ONLY THE HEIGHT IS WRITTEN HERE; the width is the tile's content box, which every tile now shares - the Any
+    tile carries the same 3.4px outline as a seed's, because in the game it is the same prefab. See tileNode for
+    the one shot that still needs a width of its own. */
 function sizeTile(tile, shot) {
   tile.style.width = TILE + 'px';
   tile.style.height = TILE + 'px';
-  if (shot) shot.style.height = (TILE - 2) + 'px';
+  if (shot) shot.style.height = (TILE - 2 * TILE_INK) + 'px';
 }
 
 /** Keeps the place of a tile on a short last line. */
@@ -1270,8 +1252,8 @@ function tileNode(row, slot) {
     : img('shot shot-item shot-img', 's1://icon/' + row.id);
   sizeTile(tile, pick);
   // A picture is not stretched to its box the way a button is: the layout runs without Unity, cannot open a
-  // PNG, and an image with no width is a box of nothing. A seed's tile has a 1px border on both sides.
-  if (row.icon !== false) pick.style.width = (TILE - 2) + 'px';
+  // PNG, and an image with no width is a box of nothing. A tile carries vanilla's 3.4px outline on both sides.
+  if (row.icon !== false) pick.style.width = (TILE - 2 * TILE_INK) + 'px';
   // NOT WHILE THE SHEET IS FOLDING AWAY - the tiles are still on screen and still take a click, and a seed
   // chosen after the player asked to leave is written to the pot exactly as if they had meant it. On a filter
   // that guard is inside `toggle`; a chooser has nothing left to draw after its call, because picking closes
@@ -1350,7 +1332,7 @@ function tileNode(row, slot) {
   taken from the index: past that tile every seed on the line sits one column further right, and the column is
   what places the hover label.
 */
-function grid(box, rows, indent) {
+function grid(box, rows) {
   let line = null;
   let tip = null;
   let col = 0;
@@ -1360,7 +1342,7 @@ function grid(box, rows, indent) {
 
   const open = () => {
     close();
-    line = el('div', indent ? 'line in' : 'line');
+    line = el('div', 'line');
     tip = tipNode();
     box.appendChild(line);
     col = 0;
@@ -1379,11 +1361,11 @@ function grid(box, rows, indent) {
 
     // Where this tile's label is and how it is placed, so a hover can fill it without the grid being rebuilt to
     // find it - see `tipAt`.
-    tipAt[slot] = { node: tip, col: col, indent: indent };
+    tipAt[slot] = { node: tip, col: col };
 
     // The line's own label, filled only for the TILE the pointer is on.
     if (view.tips !== false && shown && shown !== ANY && shown.id === row.id && shownAt === slot) {
-      fillTip(tip, row, col, indent);
+      fillTip(tip, row, col);
       slipAt = slot;
     }
     col++;
@@ -1463,7 +1445,7 @@ function modSection(box, key, rows) {
   const tiers = tiersOf(rows);
   sectionHead(box, tabLabel(key), rows.length, tierGroups && tiers.length > 1, true);
 
-  if (!tierGroups) { grid(box, rows, false); return; }
+  if (!tierGroups) { grid(box, rows); return; }
 
   for (const tier of tiers) {
     const group = rows.filter((row) => (row.tier || 0) === tier);
@@ -1481,7 +1463,7 @@ function modSection(box, key, rows) {
     }
 
     // Set in with its heading. A tier is a division of the section above it, not a grid of its own.
-    grid(box, group, tier > 0);
+    grid(box, group);
   }
 }
 
@@ -1579,12 +1561,12 @@ function foldHead(box, key, name, count) {
 function renderFilterRows(box, rows) {
   // A-Z across the whole list, headings and all. The way out for somebody who knows the name of the thing and
   // not which class the game filed it under.
-  if (flat) { grid(box, rows.slice().sort(byName), false); return; }
+  if (flat) { grid(box, rows.slice().sort(byName)); return; }
 
   for (const key of drawnKeys(rows)) {
     const group = rows.filter((row) => (row.tab || '') === key);
     foldHead(box, key, tabLabel(key), group.length);
-    if (!folded.has(key)) grid(box, group, false);
+    if (!folded.has(key)) grid(box, group);
   }
 }
 
@@ -1603,7 +1585,7 @@ function renderRows(rows) {
 
   if (rows.length === 0) {
     // Still drawn: with everything filtered away, clearing the field is the one thing left to do here.
-    if (pendingLead) grid(box, [], false);
+    if (pendingLead) grid(box, []);
     box.appendChild(el('div', 'empty', query ? 'Nothing matches "' + query + '".' : 'Nothing to pick here.'));
     return;
   }
@@ -1632,12 +1614,12 @@ function renderRows(rows) {
 
   if (favs.length) {
     sectionHead(box, 'Favourites', favs.length, false, false);
-    grid(box, favs, false);
+    grid(box, favs);
   }
 
   if (vanilla.length) {
     sectionHead(box, 'Vanilla seeds', vanilla.length, false, orphanSort);
-    grid(box, vanilla, false);
+    grid(box, vanilla);
   }
 
   for (const key of keys) modSection(box, key, modded.filter((row) => (row.tab || '') === key));
@@ -1685,10 +1667,9 @@ function render() {
 
   shell();
 
-  // Divided out of the sheet the mod measured, before anything is laid out against it. IN THIS ORDER: the tile
-  // size is what is left of a line after the columns are counted off it.
+  // Counted off the sheet the mod measured, before anything is laid out against it. The tile itself is not
+  // divided out of anything - it is vanilla's 69 on any sheet.
   PER_ROW = gridCols();
-  TILE = tileSize();
 
   // The second sheet, and everything that only exists to fill it. On one sheet those nodes are not hidden,
   // they are gone - see soloShell - so this is not a saving, it is the difference between working and throwing.
