@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Text;
 using Clipwise.Index;
@@ -154,9 +154,26 @@ namespace Clipwise.UI
         private static bool TryOpen(Transform canvasRoot, View view, Action<ItemDefinition> onPick,
                                     Func<ItemDefinition, bool, bool> onToggle)
         {
-            if (canvasRoot == null || view == null || (onPick == null && onToggle == null)) return false;
-            if (view.Rows.Count == 0) return false;
-            if (!Surfaces.Available) return false;
+            // Each guard answers separately: without that, a picker that never appeared is one silent `false`
+            // and the reader cannot tell which of the three stopped it.
+            if (canvasRoot == null || view == null || (onPick == null && onToggle == null))
+            {
+                Core.WarnThrottled("picker-open-args",
+                    "Clipwise: the picker was asked to open with no canvas, no view or no callback.");
+                return false;
+            }
+            if (view.Rows.Count == 0)
+            {
+                Core.WarnThrottled("picker-open-empty",
+                    "Clipwise: the picker was asked to open on a list with no rows in it.");
+                return false;
+            }
+            if (!Surfaces.Available)
+            {
+                Core.WarnThrottled("picker-open-sideload",
+                    "Clipwise: Sideload is not available, so the picker cannot be drawn and vanilla's own list stays.");
+                return false;
+            }
 
             try
             {
@@ -202,7 +219,12 @@ namespace Clipwise.UI
                         // The page saying it heard picker.shut and has started the fold - see RequestClose.
                         .OnCall("picker.shutting", _ => { _acked = true; return "ok"; });
 
-                if (!Surfaces.IsMounted(SurfaceId)) { Close(); return false; }
+                if (!Surfaces.IsMounted(SurfaceId))
+                {
+                    Core.Log.Error("Clipwise: the surface did not mount, so the picker is closed again and vanilla's own list stays.");
+                    Close();
+                    return false;
+                }
 
                 // The wheel is eaten by the crosshair otherwise - see CrosshairGuard for what the probe reported.
                 CrosshairGuard.Mute();
@@ -311,7 +333,11 @@ namespace Clipwise.UI
                     RectTransform inner = grid != null && grid.parent != null ? grid.parent.GetComponent<RectTransform>() : null;
                     if (inner != null && inner != card) paper = inner;
                 }
-                catch { }
+                catch (Exception e)
+                {
+                    Core.WarnThrottled("picker-inner-paper",
+                        "Clipwise: the card's inner paper could not be measured, so the sheet is sized off the whole card and may cover vanilla's wooden frame: " + e.Message);
+                }
 
                 Vector2 size = paper.rect.size;
                 if (size.x < 1f || size.y < 1f) size = new Vector2(FallbackWidth, FallbackHeight);
