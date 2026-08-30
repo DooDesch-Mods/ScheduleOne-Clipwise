@@ -1,4 +1,4 @@
-#if DEBUG
+﻿#if DEBUG
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -357,15 +357,27 @@ namespace Clipwise.Debugging
         /// game's own categories - without a shelf, a filter window or a mouse.
         ///
         /// The Add button that opens this for a player cannot be pressed from here, so this is the only way the
-        /// page it opens can be photographed at all.
+        /// page it opens can be reached at all - but it CANNOT be photographed. See the canvas note below: the
+        /// page mounts and lays out with nothing on the screen, so what this command answers is the list, the
+        /// sections and the geometry in the log, never the look.
         /// </summary>
         private static void Filter()
         {
             var options = Patches.FilterAddPatch.FilterOptions();
             if (options.Count == 0) { Complain("Clipwise: no filterable items in the registry - load a save first."); return; }
 
-            Transform canvasRoot = TopCanvas();
+            // THE SAME CANVAS THE ADD BUTTON WOULD USE, not the topmost one. FilterAddPatch resolves the root
+            // canvas above the filter window; TopCanvas() answers whichever root canvas sorts highest, and in a
+            // loaded save that is 'FullScreenFade', which is not where the real thing is drawn at all.
+            //
+            // THIS DOES NOT MAKE THE PAGE VISIBLE, and the log line below is here because of that. Neither canvas
+            // renders for a console caller: 'FullScreenFade' draws nothing, and the filter window's own canvas is
+            // only live while that window is open, which takes a mouse. So the page mounts, lays out and answers
+            // queries with nothing on the screen. What this buys is that the geometry, the parent and the mask
+            // reported by Fit are the ones a player would get, and that the canvas is named rather than guessed.
+            Transform canvasRoot = FilterCanvas() ?? TopCanvas();
             if (canvasRoot == null) { Complain("Clipwise: no overlay canvas found to draw on."); return; }
+            Say("Clipwise: cwfilter draws on canvas '" + canvasRoot.name + "'.");
 
             View view = ViewBuilder.BuildFilter("Filter", options);
             Say("Clipwise: " + options.Count + " filterable item(s) in " + view.Categories.Count + " category/categories.");
@@ -718,6 +730,32 @@ namespace Clipwise.Debugging
             for (int i = 0; i < list.Count; i++)
                 if (list[i] != null) copy.Add(list[i]);
             return copy;
+        }
+
+        /// <summary>
+        /// The root canvas the filter window itself hangs under - the one <c>FilterAddPatch.ResolveCanvasRoot</c>
+        /// picks when a player presses Add. Null before the panel exists, which is what the caller falls back on.
+        /// </summary>
+        private static Transform FilterCanvas()
+        {
+            try
+            {
+                var manager = Singleton<ItemUIManager>.Instance;
+                FilterConfigPanel panel = manager != null ? manager.FilterConfigPanel : null;
+                if (panel == null) return null;
+
+                Canvas canvas = panel.GetComponentInParent<Canvas>();
+                if (canvas == null) return null;
+
+                Canvas root = canvas.rootCanvas != null ? canvas.rootCanvas : canvas;
+                return root.transform;
+            }
+            catch (Exception e)
+            {
+                Core.Log.Warning("Clipwise: could not reach the filter window's canvas, falling back to the "
+                                 + "topmost one - the page may draw where it cannot be seen: " + e.Message);
+                return null;
+            }
         }
 
         private static Transform TopCanvas()
