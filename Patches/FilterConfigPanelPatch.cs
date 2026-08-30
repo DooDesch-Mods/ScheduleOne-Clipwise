@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Clipwise.Config;
 using Clipwise.Index;
@@ -30,13 +30,28 @@ namespace Clipwise.Patches
             try
             {
                 ItemSlot slot = __instance.OpenSlot;
-                if (slot == null) return true;
+                if (slot == null)
+                {
+                    Core.WarnThrottled("filter-add-no-slot",
+                        "Clipwise: Add was clicked while the filter window held no open slot - the vanilla grid opens instead.");
+                    return true;
+                }
 
                 List<ItemDefinition> options = FilterOptions();
-                if (options.Count == 0) return true;
+                if (options.Count == 0)
+                {
+                    Core.WarnThrottled("filter-add-no-options",
+                        "Clipwise: the registry named no filterable item at all - the vanilla grid opens instead.");
+                    return true;
+                }
 
                 Transform canvasRoot = ResolveCanvasRoot(__instance);
-                if (canvasRoot == null) return true;
+                if (canvasRoot == null)
+                {
+                    Core.WarnThrottled("filter-add-no-canvas",
+                        "Clipwise: no canvas was found above the filter window to hang the spread on - the vanilla grid opens instead.");
+                    return true;
+                }
 
                 View view = ViewBuilder.BuildFilter("Filter", options);
                 view.Owner = OwnerLine(slot);
@@ -44,13 +59,23 @@ namespace Clipwise.Patches
 
                 FilterConfigPanel panel = __instance;
 
-                if (!SurfacePicker.TryOpen(canvasRoot, view, (item, want) => Apply(panel, slot, item, want))) return true;
+                if (!SurfacePicker.TryOpen(canvasRoot, view, (item, want) => Apply(panel, slot, item, want)))
+                {
+                    Core.WarnThrottled("filter-add-not-opened",
+                        "Clipwise: the spread would not open - the line SurfacePicker logged above names the step - the vanilla grid opens instead.");
+                    return true;
+                }
 
                 // The window closes itself on the next mouse-up outside its own rect
                 // (ScheduleOne.UI.Items/FilterConfigPanel.cs:181-209). Every click on the spread is outside it, so
                 // the flag vanilla clears when it opens the search is cleared here too - and FilterUpdatePatch
                 // holds the rest of that check off while the spread is up.
-                try { panel.mouseUp = false; } catch { }
+                try { panel.mouseUp = false; }
+                catch (Exception e)
+                {
+                    Core.WarnThrottled("filter-mouseup-open",
+                        "Clipwise: the filter window's mouseUp flag stayed set while the spread opened, so the window may close itself on the next click: " + e.Message);
+                }
 
                 return false;
             }
@@ -71,7 +96,12 @@ namespace Clipwise.Patches
         /// </summary>
         private static bool Apply(FilterConfigPanel panel, ItemSlot slot, ItemDefinition item, bool want)
         {
-            try { panel.mouseUp = false; } catch { }
+            try { panel.mouseUp = false; }
+            catch (Exception e)
+            {
+                Core.WarnThrottled("filter-mouseup-apply",
+                    "Clipwise: the filter window's mouseUp flag stayed set while an item was ticked, so the window may close itself on the next click: " + e.Message);
+            }
 
             if (item == null || slot == null) return false;
 
@@ -146,7 +176,12 @@ namespace Clipwise.Patches
                     string id = def.ID;
                     if (string.IsNullOrEmpty(id) || !seen.Add(id)) continue;
                 }
-                catch { continue; }
+                catch (Exception e)
+                {
+                    Core.WarnThrottled("filter-options-registry",
+                        "Clipwise: a registry item would not say whether it is filterable and is left off the list: " + e.Message);
+                    continue;
+                }
 
                 options.Add(def);
             }
@@ -157,7 +192,12 @@ namespace Clipwise.Patches
 
                 ItemDefinition def;
                 try { def = registry._GetItem(itemId, false); }
-                catch { continue; }
+                catch (Exception e)
+                {
+                    Core.WarnThrottled("filter-options-claim",
+                        "Clipwise: the filed item '" + itemId + "' did not resolve in the registry and is left off the list: " + e.Message);
+                    continue;
+                }
 
                 if (def == null || !seen.Add(itemId)) continue;
                 options.Add(def);
@@ -181,7 +221,12 @@ namespace Clipwise.Patches
                 foreach (Row row in view.Rows)
                     if (chosen.Contains(row.ItemId)) row.Selected = true;
             }
-            catch { }
+            catch (Exception e)
+            {
+                // Not a warning: the page then shows an empty tick on items the filter already holds, which reads
+                // as "nothing is filtered" and is the one lie this screen can tell.
+                Core.Log.Error("Clipwise: the slot's filter could not be read, so the spread opens with nothing ticked even where the filter holds items: " + e.Message);
+            }
         }
 
         /// <summary>What the list is for, in the words the window itself uses.</summary>
@@ -193,7 +238,12 @@ namespace Clipwise.Patches
                     ? "Unallowed items"
                     : "Allowed items";
             }
-            catch { return ""; }
+            catch (Exception e)
+            {
+                Core.WarnThrottled("filter-owner-line",
+                    "Clipwise: the filter's whitelist/blacklist mode could not be read, so the spread carries no heading for it: " + e.Message);
+                return "";
+            }
         }
 
         private static Transform ResolveCanvasRoot(FilterConfigPanel panel)
