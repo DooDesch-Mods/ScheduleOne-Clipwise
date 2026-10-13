@@ -19,6 +19,7 @@ namespace Clipwise.Debugging
     /// Compiled only into Debug builds; Release contains none of this.
     ///
     ///   cwhelp        list the commands
+    ///   cwpatches     every Harmony patch this mod applied, and the expected ones that are missing
     ///   cwcats        every category with its source, sort order and entry count
     ///   cwdump        every resolved item claim: item id, category, source, tags
     ///   cwconflicts   items claimed by more than one source at equal standing
@@ -66,7 +67,7 @@ namespace Clipwise.Debugging
              && cmd != "cwnamecheck" && cmd != "cwauto" && cmd != "cwreload" && cmd != "cwopen"
              && cmd != "cwtab" && cmd != "cwsearch" && cmd != "cwvanilla" && cmd != "cwrect"
              && cmd != "cwboard" && cmd != "cwpng" && cmd != "cwfield" && cmd != "cwphone"
-             && cmd != "cwshut" && cmd != "cwicons" && cmd != "cwfilter")
+             && cmd != "cwshut" && cmd != "cwicons" && cmd != "cwfilter" && cmd != "cwpatches")
                 return false;
 
             // Both SubmitCommand overloads can fire for one submission (the string body calls the list body),
@@ -81,6 +82,7 @@ namespace Clipwise.Debugging
                 switch (cmd)
                 {
                     case "cwhelp": Help(); break;
+                    case "cwpatches": ReportPatches(); break;
                     case "cwcats": Cats(); break;
                     case "cwdump": Dump(); break;
                     case "cwconflicts": Conflicts(); break;
@@ -110,6 +112,7 @@ namespace Clipwise.Debugging
         private static void Help()
         {
             Say("Clipwise commands:\n"
+              + "  cwpatches    the Harmony patches this mod applied\n"
               + "  cwcats       categories with source, sort order and entry count\n"
               + "  cwdump       resolved item claims (item id, category, source, tags)\n"
               + "  cwconflicts  items claimed twice at equal standing\n"
@@ -125,6 +128,41 @@ namespace Clipwise.Debugging
               + "  cwpng        write every picker icon out as a PNG\n"
               + "  cwtab [key]  switch the open picker's tab (no arg = All)\n"
               + "  cwsearch [q] set the open picker's search text");
+        }
+
+        /// <summary>
+        /// Lists every patched method that carries one of this assembly's patch methods, then names the
+        /// expected targets that carry none - a patch class that failed to apply is otherwise silent.
+        /// </summary>
+        private static void ReportPatches()
+        {
+            var asm = typeof(TestKit).Assembly;
+            var found = new HashSet<string>(StringComparer.Ordinal);
+            var sb = new StringBuilder();
+            sb.AppendLine("Clipwise Harmony patches:");
+            foreach (var method in HarmonyLib.Harmony.GetAllPatchedMethods())
+            {
+                var info = HarmonyLib.Harmony.GetPatchInfo(method);
+                if (info == null) continue;
+                var mine = new List<string>();
+                foreach (var p in info.Prefixes) if (p.PatchMethod.DeclaringType.Assembly == asm) mine.Add("prefix " + p.PatchMethod.DeclaringType.Name);
+                foreach (var p in info.Postfixes) if (p.PatchMethod.DeclaringType.Assembly == asm) mine.Add("postfix " + p.PatchMethod.DeclaringType.Name);
+                if (mine.Count == 0) continue;
+                string target = method.DeclaringType.Name + "." + method.Name;
+                found.Add(target);
+                sb.Append("  ").Append(target).Append("  <-  ").AppendLine(string.Join(", ", mine));
+            }
+
+            string[] expected = { "ItemFieldUI.Clicked", "FilterConfigPanel.AddClicked", "FilterConfigPanel.Update", "GameInput.Exit", "Console.SubmitCommand" };
+            int missing = 0;
+            foreach (string e in expected)
+            {
+                if (found.Contains(e)) continue;
+                missing++;
+                sb.Append("  MISSING  ").AppendLine(e);
+            }
+            sb.Append(missing == 0 ? "all expected targets are patched." : missing + " expected target(s) are NOT patched.");
+            Say(sb.ToString());
         }
 
         private static void Cats()
