@@ -12,6 +12,7 @@
 ![Game](https://img.shields.io/badge/game-Schedule%20I-purple)
 ![MelonLoader](https://img.shields.io/badge/MelonLoader-0.7.3+-green)
 ![Type](https://img.shields.io/badge/type-framework-orange)
+[![Polyfill](https://polyfill.doomods.com/badge/clipwise.svg)](https://polyfill.doomods.com/mod/clipwise)
 
 ## What you get
 
