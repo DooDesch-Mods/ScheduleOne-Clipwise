@@ -28,6 +28,7 @@ namespace Clipwise.Debugging
     ///   cwreload      re-read the override files and the user preferences
     ///   cwopen        open the picker on the seed list without a clipboard
     ///   cwfilter      open the picker on the slot-filter item list, the way the filter window's Add does
+    ///   cwfilter status  whether Filterwise is loaded and the filter patch is active or standing aside
     ///   cwboard       open the real clipboard on the nearest pot, and close it again
     ///   cwshut        leave the picker the way Escape does - the fold, then the surface
     ///   cwicons       announce late icons by id, the way the icon pass does when it finishes
@@ -90,7 +91,10 @@ namespace Clipwise.Debugging
                     case "cwauto": Auto(); break;
                     case "cwreload": Reload(); break;
                     case "cwopen": Open(); break;
-                    case "cwfilter": Filter(); break;
+                    case "cwfilter":
+                        if (parts.Length > 1 && string.Equals(parts[1], "status", StringComparison.OrdinalIgnoreCase)) FilterStatus();
+                        else Filter();
+                        break;
                     case "cwfield": Field(); break;
                     case "cwvanilla": Vanilla(); break;
                     case "cwrect": Rects(); break;
@@ -120,6 +124,8 @@ namespace Clipwise.Debugging
               + "  cwauto       what the classifier alone makes of the current seed list\n"
               + "  cwreload     re-read override files and user preferences\n"
               + "  cwopen       open the picker on the seed list without a clipboard\n"
+              + "  cwfilter     open the picker on the slot-filter item list\n"
+              + "  cwfilter status  is Filterwise loaded, is the filter patch active or standing aside\n"
               + "  cwboard      open the real clipboard on the nearest pot, and close it again\n"
               + "  cwshut [slow]  leave the picker the way Escape does ('slow' to photograph the fold)\n"
               + "  cwfield      report what the pot's seed field holds, and press it for real\n"
@@ -399,6 +405,15 @@ namespace Clipwise.Debugging
         /// page mounts and lays out with nothing on the screen, so what this command answers is the list, the
         /// sections and the geometry in the log, never the look.
         /// </summary>
+        private static void FilterStatus()
+        {
+            bool decidedBefore = Patches.FilterAddPatch.FilterwiseAnswer.HasValue;
+            bool filterwise = Patches.FilterAddPatch.FilterwiseLoaded();
+            Say("Clipwise: Filterwise detected " + (filterwise ? "yes" : "no")
+                + " - filter patch " + (filterwise ? "standing aside (Filterwise's picker opens)" : "active (Clipwise's picker opens)")
+                + (decidedBefore ? "" : " [answer decided by this command, not by an Add click]"));
+        }
+
         private static void Filter()
         {
             var options = Patches.FilterAddPatch.FilterOptions();

@@ -22,10 +22,77 @@ namespace Clipwise.Patches
     [HarmonyPatch(typeof(FilterConfigPanel), nameof(FilterConfigPanel.AddClicked))]
     internal static class FilterAddPatch
     {
+        /// <summary>The answer to "is Filterwise loaded", decided at the first Add click and kept.</summary>
+        private static bool? _filterwiseLoaded;
+
+        /// <summary>
+        /// Whether Filterwise owns the filter window's item picker. Filterwise hooks
+        /// <c>FilterConfigPanel.OpenSearch</c> and <c>UpdateSearch</c>, which only run when the vanilla
+        /// <c>AddClicked</c> does, so while it is loaded this patch must not take that click over.
+        ///
+        /// Decided lazily, at the first click, because Filterwise can register after Clipwise. Found by name at
+        /// runtime (no reference to it): a registered melon, or a loaded assembly, called "Filterwise". The
+        /// separate <c>Filterwise.Api</c> assembly is not a match.
+        /// </summary>
+        internal static bool FilterwiseLoaded()
+        {
+            if (_filterwiseLoaded.HasValue) return _filterwiseLoaded.Value;
+
+            bool found = false;
+            try
+            {
+                string via = null;
+
+                var melons = MelonLoader.MelonBase.RegisteredMelons;
+                if (melons != null)
+                {
+                    foreach (var melon in melons)
+                    {
+                        if (melon?.Info != null && string.Equals(melon.Info.Name, "Filterwise", StringComparison.Ordinal))
+                        {
+                            via = "the loaded mod 'Filterwise' " + melon.Info.Version;
+                            break;
+                        }
+                    }
+                }
+
+                if (via == null)
+                {
+                    foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                    {
+                        if (string.Equals(asm.GetName().Name, "Filterwise", StringComparison.Ordinal))
+                        {
+                            via = "the loaded assembly 'Filterwise'";
+                            break;
+                        }
+                    }
+                }
+
+                if (via != null)
+                {
+                    found = true;
+                    Core.Log.Msg("Clipwise: found " + via + " - Clipwise leaves the filter window to Filterwise, so the filter's Add button opens Filterwise's picker.");
+                }
+            }
+            catch (Exception e)
+            {
+                Core.Log.Warning("Clipwise: could not tell whether Filterwise is loaded, so the filter window keeps the Clipwise picker: " + e.Message);
+                found = false;
+            }
+
+            _filterwiseLoaded = found;
+            return found;
+        }
+
+        /// <summary>For the debug console: the cached answer, or null before the first Add click decided it.</summary>
+        internal static bool? FilterwiseAnswer => _filterwiseLoaded;
+
         [HarmonyPrefix]
         private static bool Prefix(FilterConfigPanel __instance)
         {
             if (!Preferences.Enabled) return true;
+
+            if (FilterwiseLoaded()) return true;
 
             try
             {
