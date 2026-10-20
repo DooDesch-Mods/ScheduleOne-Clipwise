@@ -32,6 +32,26 @@ namespace Clipwise.Api
     ///
     /// All calls MUST be made from the Unity main thread.
     /// </summary>
+    /// <remarks>
+    /// A source and a category id must not be empty and must not contain ":" or whitespace; the host rejects them
+    /// otherwise. The source "clipwise" is reserved for the host. An item id (<c>ItemDefinition.ID</c>) is matched
+    /// without case. A tag is "namespace:path" with both parts non-empty, e.g. "doodesch.breedtoseed:tier/1"; a tag
+    /// without a namespace or in the "clipwise" namespace is dropped. Sort orders sort lower first.
+    /// </remarks>
+    /// <example>
+    /// A tab of its own for a mod's seeds, with a labelled tag chip, from a probe class:
+    /// <code>
+    /// internal static class ClipwiseProbe
+    /// {
+    ///     public static void Register()
+    ///     {
+    ///         Clipboard.RegisterTagLabel("mymod.seeds:tier/1", "Tier 1");
+    ///         Clipboard.Category("mymod.seeds", "bred", "My Seeds", sortOrder: 100)
+    ///                  .Item("lemon", "mymod_lemon_seed", tags: new[] { "mymod.seeds:tier/1" }, sortKey: "Lemon");
+    ///     }
+    /// }
+    /// </code>
+    /// </example>
     public static class Clipboard
     {
         // bound bridge delegates (null until the host is found)
@@ -51,12 +71,19 @@ namespace Clipwise.Api
 
         /// <summary>The host's ABI version: 0 when Clipwise is absent, 1 for the initial contract. Use this only to
         /// gate on capabilities added in a later ABI; everything below degrades to a no-op on its own.</summary>
+        /// <value>0 without Clipwise. 1 for the initial contract. 2 once <see cref="Facts"/> is available.</value>
         public static int AbiVersion { get { EnsureBound(); return _abi; } }
         private static int _abi;
 
         /// <summary>Declare a category - one tab in the picker. <paramref name="sortOrder"/> orders the tabs
         /// (lower first; vanilla sits at 0). <paramref name="iconItemId"/> optionally names an item whose icon
         /// represents the tab. Returns a fluent builder for the items in it. Load-order-proof.</summary>
+        /// <param name="source">The reverse-DNS id of the registering mod, e.g. "doodesch.breedtoseed". No ":" and no whitespace; "clipwise" is reserved.</param>
+        /// <param name="id">The category id within the source, e.g. "bred". No ":" and no whitespace. The tab's key is "&lt;source&gt;:&lt;id&gt;".</param>
+        /// <param name="label">The tab text, e.g. "Breed to Seed Strains". Null or blank shows the id.</param>
+        /// <param name="sortOrder">Tab position, lower first. Vanilla sits at 0. Equal values sort by key.</param>
+        /// <param name="iconItemId">An <c>ItemDefinition.ID</c>, e.g. "b2s_headband_seed". Null or blank sets no icon item.</param>
+        /// <returns>A handle that places items in this category.</returns>
         public static CategoryRef Category(string source, string id, string label, int sortOrder = 0, string iconItemId = null)
         {
             var cat = new CategoryRef(source, id);
@@ -69,6 +96,11 @@ namespace Clipwise.Api
         }
 
         /// <summary>Same as <see cref="Category"/> without the builder, for callers that keep their own loop.</summary>
+        /// <param name="source">As in <see cref="Category"/>.</param>
+        /// <param name="id">As in <see cref="Category"/>.</param>
+        /// <param name="label">As in <see cref="Category"/>.</param>
+        /// <param name="sortOrder">As in <see cref="Category"/>.</param>
+        /// <param name="iconItemId">As in <see cref="Category"/>.</param>
         public static void RegisterCategory(string source, string id, string label, int sortOrder = 0, string iconItemId = null)
         {
             Category(source, id, label, sortOrder, iconItemId);
@@ -85,6 +117,15 @@ namespace Clipwise.Api
         /// Returns nothing on purpose: a call queued before Clipwise loaded cannot know whether the future host
         /// accepts it. Re-registering the same (source, id) is an idempotent upsert, so calling this twice is safe.
         /// Load-order-proof.</summary>
+        /// <param name="source">The reverse-DNS id of the registering mod, e.g. "doodesch.breedtoseed". No ":" and no whitespace.</param>
+        /// <param name="id">This mod's own key for the entry, e.g. "headband". Null or blank is rejected.</param>
+        /// <param name="itemId">The game's <c>ItemDefinition.ID</c>, e.g. "b2s_headband_seed". Matched without case. Null or blank is rejected.</param>
+        /// <param name="category">A category key "&lt;source&gt;:&lt;id&gt;", e.g. "doodesch.breedtoseed:bred". Null or blank places the item as if it were not registered. A key that was never declared shows as a tab with a label made from its id.</param>
+        /// <param name="tags">Namespaced filter tags, e.g. <c>new[] { "doodesch.breedtoseed:tier/1" }</c>. Bare tags and tags in the "clipwise" namespace are dropped. Null adds no tags.</param>
+        /// <param name="sortOrder">Position inside the category, lower first. Equal values fall back to <paramref name="sortKey"/>.</param>
+        /// <param name="sortKey">Text that orders entries inside the category without case, e.g. "Headband". Null uses the display name. It never changes the shown name.</param>
+        /// <param name="description">Tooltip text. Null or blank shows none.</param>
+        /// <param name="precedence">Higher wins when several sources claim the same item; default 0. A user override file beats every API claim. Equal precedence goes to the claim whose source, then id, sorts first.</param>
         public static void RegisterItem(string source, string id, string itemId, string category,
                                         string[] tags = null, int sortOrder = 0, string sortKey = null,
                                         string description = null, int precedence = 0)
@@ -99,6 +140,8 @@ namespace Clipwise.Api
 
         /// <summary>Give a tag a human-readable label for its filter chip, e.g. <c>"mymod:tier/1"</c> -&gt;
         /// <c>"Tier 1"</c>. Without this the chip shows the tag's last path segment. Load-order-proof.</summary>
+        /// <param name="tag">The full tag, e.g. "doodesch.breedtoseed:tier/1". Null or empty is ignored.</param>
+        /// <param name="label">The chip text, e.g. "Tier 1". Null or empty is ignored. Registering the same tag again replaces it.</param>
         public static void RegisterTagLabel(string tag, string label)
         {
             if (string.IsNullOrEmpty(tag) || string.IsNullOrEmpty(label)) return;
@@ -133,6 +176,9 @@ namespace Clipwise.Api
         /// Only the source that registered an item is asked about it. Load-order-proof; no-op without Clipwise;
         /// needs host ABI 2.
         /// </summary>
+        /// <param name="source">The source that registered the items, e.g. "doodesch.breedtoseed". One provider per source; a second call replaces the first.</param>
+        /// <param name="provider">Gets the <c>ItemDefinition.ID</c> and returns lines of label, a tab character and value, e.g. <c>"DISCOVERED BY\tAlex"</c>.
+        /// Lines are split at <c>\n</c> and both parts are trimmed. Null or empty shows no rows. At most 12 rows show. A throw leaves the rows out and logs a warning.</param>
         public static void Facts(string source, Func<string, string> provider)
         {
             if (string.IsNullOrEmpty(source) || provider == null) return;
@@ -157,10 +203,13 @@ namespace Clipwise.Api
         public sealed class CategoryRef
         {
             /// <summary>The registering mod's reverse-DNS id.</summary>
+            /// <value>E.g. "doodesch.breedtoseed". Empty when null was passed.</value>
             public string Source { get; }
             /// <summary>The category's id within <see cref="Source"/>.</summary>
+            /// <value>E.g. "bred". Empty when null was passed.</value>
             public string Id { get; }
             /// <summary>The canonical <c>"source:id"</c> key this category is addressed by.</summary>
+            /// <value>E.g. "doodesch.breedtoseed:bred". Pass it as the category of <see cref="Clipboard.RegisterItem"/>.</value>
             public string Key { get; }
 
             internal CategoryRef(string source, string id)
@@ -171,6 +220,14 @@ namespace Clipwise.Api
             }
 
             /// <summary>Place an item in this category. See <see cref="Clipboard.RegisterItem"/> for the parameters.</summary>
+            /// <param name="id">This mod's own key for the entry, e.g. "headband".</param>
+            /// <param name="itemId">The game's <c>ItemDefinition.ID</c>, e.g. "b2s_headband_seed".</param>
+            /// <param name="tags">Namespaced filter tags, e.g. <c>new[] { "doodesch.breedtoseed:tier/1" }</c>.</param>
+            /// <param name="sortOrder">Position inside the category, lower first.</param>
+            /// <param name="sortKey">Text that orders entries inside the category, e.g. "Headband". Null uses the display name.</param>
+            /// <param name="description">Tooltip text. Null shows none.</param>
+            /// <param name="precedence">Higher wins when several sources claim the same item; default 0.</param>
+            /// <returns>This handle, for chaining.</returns>
             public CategoryRef Item(string id, string itemId, string[] tags = null, int sortOrder = 0,
                                     string sortKey = null, string description = null, int precedence = 0)
             {
