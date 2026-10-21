@@ -1,4 +1,5 @@
-﻿using System;
+﻿// Copyright (c) 2026 DooDesch. DooDesch API License (see LICENSE.md): you may copy this file unchanged.
+using System;
 using System.Collections.Generic;
 using System.Reflection;
 
