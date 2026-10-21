@@ -88,4 +88,4 @@ decides which seed a botanist grabs when a pot is set to "Any".
 
 ## License
 
-MIT. See [LICENSE.md](LICENSE.md).
+DooDesch API License - build on the API, do not copy the code. See [LICENSE.md](LICENSE.md).
