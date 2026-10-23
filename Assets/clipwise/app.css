@@ -22,7 +22,7 @@
 
       #2b3c66   what a person wrote - Back, the title, the query, names, the big numbers
       #3d4f78   the section heads, a shade lighter because they label rather than answer
-      #7d89a5   the same pen gone faint - a placeholder, an empty line, "Any" where a name would be
+      #4f5e88   the same pen gone faint (4.5:1 on the paper) - a placeholder, an empty line, "Any" where a name would be
       #e9edf5   where that writing sits on the dark hover label, with #a9b4cc for its tier
 
   The two must not be mixed on one box: a printed label in blue reads as a mistake rather than as ink.
@@ -193,7 +193,7 @@ body {
   height: 26px;
   padding-right: 6px;
   font-family: game-hand;
-  font-size: 21px;
+  font-size: 24px;
   color: #2b3c66;
   background: transparent;
   align-items: center;
@@ -216,7 +216,7 @@ body {
   flex: 1;
   min-width: 0;
   font-family: game-hand;
-  font-size: 25px;
+  font-size: 27px;
   color: #2b3c66;
   text-align: center;
   white-space: nowrap;
@@ -226,11 +226,12 @@ body {
    whole head row is one hand, and a sans number at the end of it broke the line in two. */
 .head-count {
   flex: none;
-  font-family: game-hand;
-  font-size: 15px;
-  color: #6b7079;
+  font-family: game-ui;
+  font-size: 13px;
+  color: #454951;
   text-align: right;
   white-space: nowrap;
+  font-weight: 500;
 }
 
 /* ---- the search line --------------------------------------------------------------------------------------- */
@@ -260,10 +261,11 @@ body {
 
 .find-label {
   flex: none;
-  font-family: game-hand;
-  font-size: 17px;
-  color: #7d89a5;
+  font-family: game-ui;
+  font-size: 14px;
+  color: #4f5e88;
   white-space: nowrap;
+  font-weight: 500;
 }
 
 .find {
@@ -274,15 +276,16 @@ body {
   background: transparent;
   /* WRITTEN, NOT TYPED. The query is the player's own hand on the pad, so it carries the handwritten face and
      the pen's ink; the word `Search` in front of it is the dimmer hand of a form that was printed empty. */
-  font-family: game-hand;
-  font-size: 19px;
+  font-family: game-ui;
+  font-size: 16px;
   color: #2b3c66;
   align-items: center;
+  font-weight: 500;
 }
 
 /* The hint is drawn by the field itself rather than by a generated box - one of the four pseudo-element
    spellings the parser accepts, and the only one this page needs. */
-.find::placeholder { color: #7d89a5; }
+.find::placeholder { color: #4f5e88; }
 
 /* ---- the filter chips ------------------------------------------------------------------------------------ */
 
@@ -314,11 +317,12 @@ body {
   border-radius: 13px;
   background: transparent;
   color: #3a3d42;
-  font-family: game-hand;
-  font-size: 15px;
+  font-family: game-ui;
+  font-size: 14px;
   text-align: center;
   align-items: center;
   white-space: nowrap;
+  font-weight: 500;
 }
 
 .chip:hover { background: #e0e2e5; }
@@ -357,12 +361,13 @@ body {
    the word anyway, so centring it is a no-op on the div. */
 .section-name {
   flex: none;
-  font-family: game-hand;
-  font-size: 16px;
+  font-family: game-ui;
+  font-size: 14px;
   color: #3d4f78;
   white-space: nowrap;
   background: transparent;
   align-items: center;
+  font-weight: 600;
 }
 
 .section-name:hover { color: #55648c; }
@@ -376,9 +381,10 @@ body {
 
 .section-count {
   flex: none;
-  font-size: 11px;
-  color: #8b9098;
+  font-size: 12px;
+  color: #50545c;
   white-space: nowrap;
+  font-weight: 500;
 }
 
 /* The two second-level controls. Small, printed rather than written, and off to the side: they order what is
@@ -392,11 +398,12 @@ body {
   border: 1.4px solid #8b9098;
   border-radius: 10px;
   background: transparent;
-  color: #5b6068;
-  font-size: 11px;
+  color: #3a3d42;
+  font-size: 12px;
   text-align: center;
   align-items: center;
   white-space: nowrap;
+  font-weight: 500;
 }
 
 .knob:hover { background: #e0e2e5; }
@@ -419,10 +426,10 @@ body {
 
 .tier-name {
   flex: none;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 1.3px;
-  color: #7b8088;
+  color: #4a4e56;
   white-space: nowrap;
 }
 
@@ -441,9 +448,10 @@ body {
 
 .tier-count {
   flex: none;
-  font-size: 10px;
-  color: #9aa0a6;
+  font-size: 11px;
+  color: #50545c;
   white-space: nowrap;
+  font-weight: 500;
 }
 
 /* ---- the grid -------------------------------------------------------------------------------------------- */
@@ -572,7 +580,7 @@ body {
   flex: 1;
   font-family: game-hand;
   font-size: 22px;
-  color: #8b9098;
+  color: #50545c;
   text-align: center;
   align-items: center;
   justify-content: center;
@@ -588,7 +596,7 @@ body {
 .shot-mark {
   font-family: game-hand;
   font-size: 20px;
-  color: #7d89a5;
+  color: #4f5e88;
   text-align: center;
   align-items: center;
   justify-content: center;
@@ -603,7 +611,7 @@ body {
   height: 72px;
   font-family: game-hand;
   font-size: 30px;
-  color: #7d89a5;
+  color: #4f5e88;
   text-align: center;
   align-items: center;
   justify-content: center;
@@ -697,8 +705,9 @@ body {
 
 .empty {
   padding: 24px 8px;
-  color: #8b9098;
+  color: #50545c;
   text-align: center;
+  font-weight: 500;
 }
 
 /* ---- the hover label ------------------------------------------------------------------------------------- */
@@ -795,10 +804,11 @@ body {
 
 .tip-tier {
   flex: none;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 1px;
   color: #a9b4cc;
   white-space: nowrap;
+  font-weight: 600;
 }
 
 /* ---- the second sheet: the record -------------------------------------------------------------------------- */
@@ -832,9 +842,10 @@ body {
 
 /* The line printed over the resting state - what the field is set to, rather than what the pointer is on. */
 .rec-head {
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 1.4px;
-  color: #8b9098;
+  color: #50545c;
+  font-weight: 600;
 }
 
 /* THE VIAL AND THE NAME START AT THE SAME HEIGHT. Centred, the two were settled against each other rather
@@ -880,7 +891,7 @@ body {
   border-radius: 9px;
   font-family: game-hand;
   font-size: 24px;
-  color: #8b9098;
+  color: #50545c;
   text-align: center;
   align-items: center;
   justify-content: center;
@@ -904,11 +915,12 @@ body {
 .rec-name.small { font-size: 28px; }
 
 /* "Any" is not a name a person wrote down - it is the field left blank, so it is the dim hand. */
-.rec-name.dim { color: #7d89a5; }
+.rec-name.dim { color: #4f5e88; }
 
 .rec-sub {
-  font-size: 14px;
-  color: #6b7079;
+  font-size: 15px;
+  color: #454951;
+  font-weight: 500;
 }
 
 .rec-star {
@@ -956,6 +968,7 @@ body {
   text-align: center;
   align-items: center;
   white-space: nowrap;
+  font-weight: 600;
 }
 
 /* The cross this seed came from: two boxed cells and the letter between them. */
@@ -979,21 +992,23 @@ body {
 }
 
 .parent-k {
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 1.2px;
-  color: #8b9098;
+  color: #50545c;
   text-align: center;
   white-space: nowrap;
+  font-weight: 600;
 }
 
 .parent-v {
-  font-family: game-hand;
-  font-size: 18px;
+  font-family: game-ui;
+  font-size: 16px;
   color: #2b3c66;
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-weight: 600;
 }
 
 .cross-x {
@@ -1001,7 +1016,7 @@ body {
   width: 14px;
   font-family: game-hand;
   font-size: 20px;
-  color: #6b7079;
+  color: #454951;
   text-align: center;
 }
 
@@ -1024,21 +1039,23 @@ body {
 }
 
 .cell-k {
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 1.2px;
-  color: #8b9098;
+  color: #50545c;
   text-align: center;
   white-space: nowrap;
+  font-weight: 600;
 }
 
 .cell-v {
-  font-family: game-hand;
-  font-size: 22px;
+  font-family: game-ui;
+  font-size: 20px;
   color: #2b3c66;
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-weight: 600;
 }
 
 /* One "LABEL value" line under the record, for everything that is neither a number cell nor a parent. */
@@ -1053,18 +1070,19 @@ body {
 .fact-k {
   flex: none;
   width: 66px;
-  font-size: 8px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 1px;
-  color: #8b9098;
+  color: #50545c;
   padding-top: 2px;
 }
 
 .fact-v {
   flex: 1;
   min-width: 0;
-  font-size: 11px;
+  font-size: 13px;
   color: #23262b;
+  font-weight: 500;
 }
 
 /* Fills whatever is left between the record and the dock, so the dock does not float up the sheet when the
@@ -1072,12 +1090,13 @@ body {
 .rec-gap {
   flex: 1;
   min-height: 0;
-  font-family: game-hand;
-  font-size: 19px;
-  color: #7d89a5;
+  font-family: game-ui;
+  font-size: 15px;
+  color: #4f5e88;
   text-align: center;
   align-items: center;
   justify-content: center;
+  font-weight: 500;
 }
 
 /* ---- the dock: effect filters ------------------------------------------------------------------------------ */
@@ -1106,10 +1125,11 @@ body {
 
 .dock-name {
   flex: none;
-  font-family: game-hand;
-  font-size: 16px;
+  font-family: game-ui;
+  font-size: 14px;
   color: #3d4f78;
   white-space: nowrap;
+  font-weight: 600;
 }
 
 .dock-fill {
@@ -1121,9 +1141,10 @@ body {
 
 .dock-count {
   flex: none;
-  font-size: 11px;
-  color: #8b9098;
+  font-size: 12px;
+  color: #50545c;
   white-space: nowrap;
+  font-weight: 500;
 }
 
 .dock-rows {
@@ -1147,11 +1168,12 @@ body {
   border: 1.4px solid #8b9098;
   border-radius: 13px;
   background: transparent;
-  color: #5b6068;
-  font-size: 13px;
+  color: #3a3d42;
+  font-size: 14px;
   text-align: center;
   align-items: center;
   white-space: nowrap;
+  font-weight: 500;
 }
 
 .dchip:hover { background: #e0e2e5; }

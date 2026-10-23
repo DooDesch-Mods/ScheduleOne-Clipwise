@@ -340,7 +340,7 @@ function gridCols() {
 const CHIP_PAD = 28;
 
 function chipWidth(label) {
-  return Math.round(String(label).length * 6.4) + CHIP_PAD;
+  return Math.round(String(label).length * 7.4) + CHIP_PAD;
 }
 
 function chip(row, label, on, act) {
@@ -527,7 +527,7 @@ function filterDefs() {
 }
 
 function dchipWidth(label) {
-  return Math.round(String(label).length * 6.2) + 25;
+  return Math.round(String(label).length * 7.5) + 25;
 }
 
 function renderDock() {
@@ -1086,7 +1086,7 @@ function tipRoom(col, flip) {
     word the label exists to say. */
 function tipWidth(name, tier) {
   const a = String(name || '').length * 8.3;
-  const b = tier ? String(tier).length * 5.6 + 7 : 0;
+  const b = tier ? String(tier).length * 6.2 + 7 : 0;
   return Math.round(a + b) + 22;
 }
 
