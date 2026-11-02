@@ -289,7 +289,9 @@ jobs:
           # A prerelease until somebody sets PUBLIC_RELEASE, because that is what these tags are: builds for
           # the people testing, not a version anybody outside has been told about.
           prerelease: ${{ vars.PUBLIC_RELEASE != 'true' }}
-          files: release/Clipwise.dll
+          files: |
+            release/Clipwise.dll
+            Clipwise_${{ needs.build.outputs.version }}.zip
           body: |
             ## Changes in ${{ needs.build.outputs.version }}
 
