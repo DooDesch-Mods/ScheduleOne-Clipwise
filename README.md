@@ -2,8 +2,6 @@
 
 > 🛟 **Need help or found a bug?** Get support at [support.doodesch.de/clipwise](https://support.doodesch.de/clipwise).
 
-[![Discord](https://mods.doodesch.de/img/badge.svg)](https://mods.doodesch.de)
-
 > Pick up the management clipboard, click a pot's seed field, and the game shows you every seed in one flat
 > grid of look-alike icons. No scrolling, no search, no grouping, and the name only shows up for whichever
 > one your cursor happens to be on. Install a mod that adds thirty strains and that grid runs off the bottom
@@ -14,7 +12,7 @@
 ![Game](https://img.shields.io/badge/game-Schedule%20I-purple)
 ![MelonLoader](https://img.shields.io/badge/MelonLoader-0.7.3+-green)
 ![Type](https://img.shields.io/badge/type-framework-orange)
-[![Polyfill](https://polyfill.doomods.com/badge/clipwise.svg)](https://polyfill.doomods.com/mod/clipwise)
+[![Discord](https://mods.doodesch.de/img/badge.svg)](https://mods.doodesch.de) [![Polyfill](https://polyfill.doomods.com/badge/clipwise.svg)](https://polyfill.doomods.com/mod/clipwise)
 
 ## What you get
 
