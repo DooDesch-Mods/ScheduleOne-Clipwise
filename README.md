@@ -2,6 +2,8 @@
 
 > 🛟 **Need help or found a bug?** Get support at [support.doodesch.de/clipwise](https://support.doodesch.de/clipwise).
 
+[![Discord](https://mods.doodesch.de/img/badge.svg)](https://mods.doodesch.de)
+
 > Pick up the management clipboard, click a pot's seed field, and the game shows you every seed in one flat
 > grid of look-alike icons. No scrolling, no search, no grouping, and the name only shows up for whichever
 > one your cursor happens to be on. Install a mod that adds thirty strains and that grid runs off the bottom
@@ -85,6 +87,12 @@ Safe. Clipwise changes what you see, never what the game stores. Your choice sti
 as the item's ID exactly as before, and two players can have completely different tabs open without
 disagreeing about anything. It also never reorders the game's own seed list, because on the host that order
 decides which seed a botanist grabs when a pot is set to "Any".
+
+## Community
+
+[![DooDesch Mods on Discord](https://mods.doodesch.de/img/card.svg)](https://mods.doodesch.de)
+
+Join the DooDesch Mods Discord: update pings, polls on what comes next, and playtests of new mods.
 
 ## License
 

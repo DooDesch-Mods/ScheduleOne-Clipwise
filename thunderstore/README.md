@@ -2,6 +2,8 @@
 
 > 🛟 **Need help or found a bug?** Get support at [support.doodesch.de/clipwise](https://support.doodesch.de/clipwise).
 
+[![Discord](https://mods.doodesch.de/img/badge.svg)](https://mods.doodesch.de)
+
 [![Polyfill](https://polyfill.doomods.com/badge/clipwise.svg)](https://polyfill.doomods.com/mod/clipwise)
 
 Pick up the management clipboard, click a pot's seed field, and the game shows you every seed in one flat grid
@@ -65,3 +67,9 @@ so there is nothing for it to draw with.
 
 Settings live in `UserData/MelonPreferences.cfg` under `[Clipwise]`. Favorites and hidden entries live in
 `UserData/Clipwise/preferences.json`. Neither touches your save, and neither is shared in co-op.
+
+## Community
+
+[![DooDesch Mods on Discord](https://mods.doodesch.de/img/card.svg)](https://mods.doodesch.de)
+
+Join the DooDesch Mods Discord: update pings, polls on what comes next, and playtests of new mods.
