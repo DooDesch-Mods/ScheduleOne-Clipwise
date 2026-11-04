@@ -69,7 +69,7 @@ the last word. The folder gets a commented example on first launch.
 
 1. [MelonLoader](https://melonwiki.xyz/) 0.7.3+
 2. [S1API](https://thunderstore.io/c/schedule-i/p/ifBars/S1API_Forked/)
-3. [Sideload](https://thunderstore.io/c/schedule-i/p/DooDesch/Sideload/) 1.31.0+
+3. [Sideload](https://www.nexusmods.com/schedule1/mods/2360) 1.31.0+
 4. Drop `Clipwise.dll` into `Schedule I/Mods/`
 
 Without Sideload the clipboard keeps the game's own item grid: Clipwise draws its picker as a Sideload page,
