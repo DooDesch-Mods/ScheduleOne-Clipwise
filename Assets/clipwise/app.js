@@ -654,7 +654,7 @@ function markTick(itemId, on) {
   const nodes = tickAt[itemId];
   if (!nodes) return;
   for (const at of nodes) {
-    if (at.tile) at.tile.style.outline = on ? '2px solid #3a3d42' : 'none';
+    if (at.tile) at.tile.style.outline = on ? '2px solid #3c3c3c' : 'none';
     if (at.mark) at.mark.style.transform = on ? 'scale(1)' : 'scale(0)';
   }
 }
@@ -1214,7 +1214,7 @@ function tileNode(row, slot) {
   const filter = filtering();
   const tile = el('div', 'tile' + (row.sel && !filter ? ' sel' : ''));
 
-  if (filter && row.sel) tile.style.outline = '2px solid #3a3d42';
+  if (filter && row.sel) tile.style.outline = '2px solid #3c3c3c';
 
   /*
     ON OR OFF THE LIST, WRITTEN ONCE AND SHARED BY BOTH TARGETS.
