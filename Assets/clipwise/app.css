@@ -18,7 +18,7 @@
   numbers. `game-ui` is Open Sans and carries everything printed ON the pad: labels, counts, facts.
 
   TWO HANDS, AND THEREFORE TWO INKS. The form is printed and the entries are written onto it, so the printed
-  half keeps the card's near-black #23262b and everything written carries a ballpoint blue:
+  half keeps the card's own ink, vanilla's 60/60/60, and everything written carries a ballpoint blue:
 
       #2b3c66   what a person wrote - Back, the title, the query, names, the big numbers
       #3d4f78   the section heads, a shade lighter because they label rather than answer
@@ -34,17 +34,12 @@ body {
   font-family: game-ui;
   font-size: 15px;
   /*
-    NOT VANILLA'S NUMBER, AND ON PURPOSE - see #238. The game's ink is 60/60/60 and this is 35/38/43, but the
-    two cannot be compared as numbers: a Sideload surface renders a CSS colour at its LINEAR value (measured on
-    this page: #d7d9dc lands at 177, #3a3d42 at 13), while the game's own Image is unlit uGUI and lands at the
-    number it was given. Written as #3C3C3C this ink would render at 11, six times darker than the 61 vanilla
-    puts on the same paper.
-
-    So every colour on this page waits for the gamma step, and moves in ONE pass when it lands. What each one
-    becomes then is vanilla's own number; what it would have to be TODAY to look like vanilla is
-    srgb(linear(v)) - about #868686 for this ink and #CFCFCF for the tile outline.
+    VANILLA'S INK, 60/60/60, the number the game's own card prints in. A Sideload surface puts a CSS colour on
+    the screen at the number it is written as, so a colour taken from vanilla is written as vanilla's number:
+    the ink, the rule and the outlines below are the game's, the paper, the fills and the blue pen are the
+    design's.
   */
-  color: #23262b;
+  color: #3c3c3c;
 }
 
 /* ---- the pad --------------------------------------------------------------------------------------------- */
@@ -252,11 +247,10 @@ body {
      The 10 on the right is the scroll bar's column given back, which makes the rule 370 wide, 25 in from each
      side - vanilla's number. */
   margin: 10px 10px 0 0;
-  /* THINNER THAN VANILLA'S, AND ITS COLOUR IS NOT VANILLA'S EITHER. The game draws a hand-drawn line sprite
+  /* THINNER THAN VANILLA'S, IN VANILLA'S COLOUR. The game draws a hand-drawn line sprite
      (`handdrawn_line_horizontal`, 370x12 on the card, 60/60/60) whose stroke measures about 5px with tapered
-     ends; a border is a flat stroke and 5px of it reads as a printed bar. The colour waits for the gamma step
-     with every other colour on the page - see `body`. */
-  border-bottom: 1.6px solid #3a3d42;
+     ends; a border is a flat stroke and 5px of it reads as a printed bar. The colour is the sprite's. */
+  border-bottom: 1.6px solid #3c3c3c;
 }
 
 .find-label {
@@ -313,10 +307,10 @@ body {
   /* Never squeezed to fit the bar: a chip narrower than its word is a chip with half a word in it. */
   flex-shrink: 0;
   padding: 0 12px;
-  border: 1.6px solid #3a3d42;
+  border: 1.6px solid #3c3c3c;
   border-radius: 13px;
   background: transparent;
-  color: #3a3d42;
+  color: #3c3c3c;
   font-family: game-ui;
   font-size: 14px;
   text-align: center;
@@ -328,8 +322,8 @@ body {
 .chip:hover { background: #e0e2e5; }
 
 .chip.on {
-  background: #3a3d42;
-  border: 1.6px solid #3a3d42;
+  background: #3c3c3c;
+  border: 1.6px solid #3c3c3c;
   color: #e9eaec;
 }
 
@@ -398,7 +392,7 @@ body {
   border: 1.4px solid #8b9098;
   border-radius: 10px;
   background: transparent;
-  color: #3a3d42;
+  color: #3c3c3c;
   font-size: 12px;
   text-align: center;
   align-items: center;
@@ -411,8 +405,8 @@ body {
 /* Filled, not shaded. A knob that is ON is the same mark as a ticked effect chip, and the sheet has one way of
    saying "this is on": the ink filled in. */
 .knob.on {
-  border: 1.2px solid #3a3d42;
-  background: #3a3d42;
+  border: 1.2px solid #3c3c3c;
+  background: #3c3c3c;
   color: #e9eaec;
 }
 
@@ -486,17 +480,14 @@ body {
   the game's own screenshot, where that outline is 2px wide in a shot scaled 0.626. Its sliced corner works out
   at 255/30 = 8.5px, which is the 9px radius this page already had.
 
-  THE COLOUR IS STILL OURS. Vanilla's outline is 160/160/160 and this is 198/201/205, and that is not a drift
-  to fix today: a surface renders a CSS colour at its LINEAR value, so #c6c9cd lands at about 148 and vanilla's
-  own #A0A0A0 would land at 90. The number that is wrong on paper is the one that matches on screen - see
-  `body`, and #238's own note that colours cannot be compared until the gamma step is settled.
+  THE COLOUR IS VANILLA'S too, 160/160/160 - see `body`.
 
   THE FILL IS OURS TOO. The game's tile has a background sprite drawn at alpha 0 - its outline stands on bare
   paper. #e4e6e8 is the design's (SPEC part 2) and is kept deliberately.
 */
 .tile {
   flex: none;
-  border: 3.4px solid #c6c9cd;
+  border: 3.4px solid #a0a0a0;
   border-radius: 9px;
   background: #e4e6e8;
 }
@@ -511,10 +502,8 @@ body {
 /* THE SAME OUTLINE, RECOLOURED, which is all the game does: `ItemSelector.cs:126` writes 90/90/90 into the
    Outline of the selected option and changes nothing else - same sprite, same 3.4px, one colour. So this is a
    colour and not a second border width, which also makes it the one write this engine answers by repainting a
-   single box.
-
-   THE HUE IS OURS UNTIL THE GAMMA STEP - see `body`. Vanilla's 90/90/90 would render at 24 here. */
-.tile.sel { border-color: #3a3d42; }
+   single box, in vanilla's 90/90/90. */
+.tile.sel { border-color: #5a5a5a; }
 
 /* The game draws the None option as an empty frame with a cross in it, and so does this.
 
@@ -573,14 +562,13 @@ body {
    next to a record on the facing sheet that says it in full. Anything outside Latin-1 comes out as a box in
    the game's font.
 
-   VANILLA'S CROSS IS A 25x25 SPRITE IN 160/160/160, and neither number is copied here: the colour waits for
-   the gamma step with every other colour on the page (see `body`), and the size is not measured - a 22px Caveat
-   X stands about 15px tall, so this glyph is smaller than the game's and only an eye can say by how much. */
+   VANILLA'S CROSS IS A 25x25 SPRITE IN 160/160/160. The colour is copied; the size is not measured - a 22px
+   Caveat X stands about 15px tall, so this glyph is smaller than the game's and only an eye can say by how much. */
 .shot-cross {
   flex: 1;
   font-family: game-hand;
   font-size: 22px;
-  color: #50545c;
+  color: #a0a0a0;
   text-align: center;
   align-items: center;
   justify-content: center;
@@ -668,7 +656,7 @@ body {
   right: 1px;
   width: 15px;
   height: 15px;
-  border: 1.6px solid #3a3d42;
+  border: 1.6px solid #3c3c3c;
   border-radius: 3px;
   /* Paler than the tile it stands on, so an EMPTY box still reads as a control rather than as a hole in the
      drawing. The paper is lit and the ink is not - a hairline alone is gone by nightfall. */
@@ -771,7 +759,7 @@ body {
   gap: 7px;
   padding: 4px 10px;
   border-radius: 4px;
-  background: #3a3d42;
+  background: #3c3c3c;
   overflow: hidden;
 }
 
@@ -784,7 +772,7 @@ body {
   left: -4px;
   width: 8px;
   height: 8px;
-  background: #3a3d42;
+  background: #3c3c3c;
   transform: rotate(45deg);
 }
 
@@ -943,7 +931,7 @@ body {
   width: 100%;
   height: 7px;
   margin: 16px 0 6px 0;
-  color: #3a3d42;
+  color: #3c3c3c;
 }
 
 /* IN THE NAME'S OWN COLUMN, not under the whole block. As a sibling of the header the pills started at the
@@ -962,7 +950,7 @@ body {
   height: 19px;
   padding: 0 10px;
   border-radius: 12px;
-  background: #3a3d42;
+  background: #3c3c3c;
   color: #e9eaec;
   font-size: 13px;
   text-align: center;
@@ -1081,7 +1069,7 @@ body {
   flex: 1;
   min-width: 0;
   font-size: 13px;
-  color: #23262b;
+  color: #3c3c3c;
   font-weight: 500;
 }
 
@@ -1168,7 +1156,7 @@ body {
   border: 1.4px solid #8b9098;
   border-radius: 13px;
   background: transparent;
-  color: #3a3d42;
+  color: #3c3c3c;
   font-size: 14px;
   text-align: center;
   align-items: center;
@@ -1179,7 +1167,7 @@ body {
 .dchip:hover { background: #e0e2e5; }
 
 .dchip.on {
-  border: 1.2px solid #3a3d42;
-  background: #3a3d42;
+  border: 1.2px solid #3c3c3c;
+  background: #3c3c3c;
   color: #e9eaec;
 }
